@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚽ Quiniela Familia Vives y Asociados – Mundial 2026</title>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green-dark: #0d4a1f; --green: #1a6e2e; --gold: #f5a623; --gold-dark: #d4881a;
+      --p1-bg:#e8f5e9; --p1-br:#2e7d32; --p1-tx:#1b5e20;
+      --pX-bg:#fff3e0; --pX-br:#f57c00; --pX-tx:#e65100;
+      --p2-bg:#e3f2fd; --p2-br:#1565c0; --p2-tx:#0d47a1;
+      --shadow: 0 2px 12px rgba(0,0,0,.14);
+    }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+           background:linear-gradient(160deg,#0d4a1f 0%,#1a6e2e 100%);min-height:100vh;color:#1a1a1a; }
+
+    /* Loading */
+    #loadingOverlay { position:fixed;inset:0;background:#0d4a1f;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;z-index:9999;color:#fff;gap:16px; }
+    #loadingOverlay.hidden { display:none; }
+    .spinner { width:50px;height:50px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--gold);
+      border-radius:50%;animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Header */
+    #appHeader { position:sticky;top:0;z-index:100;background:rgba(0,0,0,.35);
+      backdrop-filter:blur(10px);display:none;flex-direction:column;padding:8px 16px 5px; }
+    .hrow1 { display:flex;align-items:center;gap:8px; }
+    .header-title { color:var(--gold);font-weight:700;font-size:.92rem;line-height:1.2; }
+    .header-sub   { color:rgba(255,255,255,.5);font-size:.67rem; }
+    .header-user  { flex:1;text-align:center;color:rgba(255,255,255,.75);font-size:.78rem; }
+    .header-nav   { display:flex;gap:5px; }
+    .nav-btn { background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);
+      padding:5px 10px;border-radius:20px;cursor:pointer;font-size:.75rem;font-weight:500;transition:all .2s;white-space:nowrap; }
+    .nav-btn:hover,.nav-btn.active { background:var(--gold);color:var(--green-dark);border-color:var(--gold);font-weight:700; }
+    .phase-pills { display:flex;gap:4px;padding:4px 0 2px;flex-wrap:wrap; }
+    .phase-pill { font-size:.65rem;padding:2px 8px;border-radius:10px;font-weight:600; }
+    .pill-open   { background:#c8e6c9;color:#1b5e20; }
+    .pill-locked { background:#ffcdd2;color:#b71c1c; }
+    .pill-future { background:rgba(255,255,255,.12);color:rgba(255,255,255,.65); }
+
+    /* Screens & layout */
+    .screen { display:none; }  .screen.active { display:block; }
+    .container { max-width:760px;margin:0 auto;padding:20px 16px; }
+    .card { background:#fff;border-radius:14px;padding:22px;box-shadow:var(--shadow);margin-bottom:18px; }
+    .card h2 { font-size:1.15rem;color:var(--green-dark);margin-bottom:14px; }
+    .card h3 { font-size:1rem;color:#333;margin-bottom:12px; }
+
+    /* Buttons */
+    .btn { display:inline-block;padding:11px 22px;border-radius:10px;font-weight:700;font-size:.95rem;
+      cursor:pointer;border:none;transition:all .2s;text-align:center; }
+    .btn-primary  { background:var(--green);color:#fff;width:100%; }
+    .btn-primary:hover  { background:var(--green-dark);transform:translateY(-1px); }
+    .btn-primary:disabled { background:#aaa;cursor:not-allowed;transform:none; }
+    .btn-gold     { background:var(--gold);color:var(--green-dark); }
+    .btn-gold:hover { background:var(--gold-dark);transform:translateY(-1px); }
+    .btn-secondary { background:#f0f0f0;color:#444; }
+    .btn-secondary:hover { background:#e0e0e0; }
+    .btn-sm { padding:6px 14px;font-size:.82rem; }
+
+    /* Inputs */
+    .input-group { margin-bottom:14px; }
+    .input-group label { display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:5px; }
+    .input-group input { width:100%;padding:11px 14px;border:2px solid #ddd;border-radius:9px;font-size:1rem;transition:border-color .2s; }
+    .input-group input:focus { outline:none;border-color:var(--green); }
+
+    /* Welcome */
+    .welcome-hero { text-align:center;padding:32px 16px 20px;color:#fff; }
+    .welcome-hero .emoji { font-size:3rem;margin-bottom:8px; }
+    .welcome-hero h1 { font-size:1.7rem;color:var(--gold);text-shadow:0 2px 6px rgba(0,0,0,.4);margin-bottom:4px;line-height:1.2; }
+    .welcome-hero .tagline { font-size:.95rem;opacity:.8;margin-bottom:4px; }
+    .welcome-hero .sub { font-size:.82rem;opacity:.6; }
+    .login-card { max-width:380px;margin:0 auto 28px; }
+    .login-error { color:#e53935;font-size:.85rem;margin-top:8px;display:none; }
+
+    /* Progress */
+    .progress-wrap { background:rgba(255,255,255,.12);border-radius:10px;padding:10px 14px;
+      margin-bottom:14px;color:#fff;display:flex;align-items:center;gap:10px; }
+    .progress-bar-bg { flex:1;background:rgba(255,255,255,.2);border-radius:10px;height:7px;overflow:hidden; }
+    .progress-bar-fill { height:100%;background:var(--gold);border-radius:10px;transition:width .3s; }
+    .progress-text { font-size:.82rem;white-space:nowrap; }
+
+    /* Phase header */
+    .phase-header { color:#fff;font-size:.88rem;font-weight:700;padding:18px 0 6px;
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .phase-badge { font-size:.7rem;padding:2px 8px;border-radius:8px;font-weight:600; }
+    .badge-open   { background:#c8e6c9;color:#1b5e20; }
+    .badge-locked { background:#ffcdd2;color:#b71c1c; }
+    .badge-pts    { background:rgba(255,255,255,.18);color:rgba(255,255,255,.85); }
+
+    /* Locked banner */
+    .locked-banner { background:#fff3e0;border:2px solid #f57c00;border-radius:10px;padding:10px 14px;
+      color:#e65100;font-weight:600;text-align:center;margin-bottom:14px;font-size:.88rem; }
+
+    /* Day header */
+    .day-header { color:rgba(255,255,255,.75);font-size:.8rem;font-weight:600;padding:10px 0 4px;
+      border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:6px; }
+
+    /* Match card */
+    .match-card { background:#fff;border-radius:11px;padding:12px 14px;margin-bottom:6px;
+      box-shadow:0 1px 6px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px; }
+    .match-card.locked-phase { background:#fafafa; }
+    .match-num { font-size:.7rem;color:#bbb;width:18px;text-align:center;flex-shrink:0; }
+    .match-group { background:var(--green);color:#fff;width:26px;height:26px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0; }
+    .match-group.gko { background:#6a1b9a; } /* purple for knockout */
+    .match-group.glocked { background:#bbb; }
+    .match-teams { flex:1;min-width:0; }
+    .match-teams .t1,.match-teams .t2 { font-weight:600;font-size:.87rem; }
+    .match-teams .vs { font-size:.68rem;color:#aaa;margin:1px 0; }
+    .tbd-label { font-size:.78rem;color:#bbb;font-style:italic; }
+    .pts-badge { font-size:.65rem;color:#aaa;white-space:nowrap; }
+
+    /* Pick buttons */
+    .match-picks { display:flex;gap:5px;flex-shrink:0; }
+    .pick-btn { width:36px;height:36px;border-radius:7px;border:2px solid #e0e0e0;background:#fafafa;
+      font-weight:700;font-size:.82rem;cursor:pointer;color:#888;transition:all .15s; }
+    .pick-btn:hover:not(:disabled) { border-color:var(--green);color:var(--green);transform:scale(1.07); }
+    .pick-btn:disabled { cursor:not-allowed;opacity:.5; }
+    .pick-btn.sel-1 { background:var(--p1-bg);border-color:var(--p1-br);color:var(--p1-tx); }
+    .pick-btn.sel-X { background:var(--pX-bg);border-color:var(--pX-br);color:var(--pX-tx); }
+    .pick-btn.sel-2 { background:var(--p2-bg);border-color:var(--p2-br);color:var(--p2-tx); }
+
+    /* Save bar */
+    #saveBar { position:sticky;bottom:0;background:rgba(13,74,31,.96);backdrop-filter:blur(8px);
+      padding:10px 16px;display:flex;align-items:center;gap:10px; }
+    #saveStatus { flex:1;color:rgba(255,255,255,.8);font-size:.82rem; }
+
+    /* Leaderboard */
+    .lb-table { width:100%;border-collapse:collapse;font-size:.9rem; }
+    .lb-table th { background:var(--green-dark);color:#fff;padding:9px 13px;text-align:left;font-size:.8rem; }
+    .lb-table th:last-child,.lb-table td:last-child { text-align:right; }
+    .lb-table td { padding:9px 13px;border-bottom:1px solid #f0f0f0; }
+    .lb-table tr:last-child td { border-bottom:none; }
+    .lb-table tr:nth-child(even) td { background:#f9f9f9; }
+    .lb-table tr.my-row td { background:#e8f5e9 !important; }
+    .score-big { font-weight:800;font-size:1.1rem;color:var(--green); }
+    .pending-score { color:#aaa;font-style:italic; }
+
+    /* My picks detail */
+    .pick-row { display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:.85rem; }
+    .pick-row:last-child { border-bottom:none; }
+    .pick-row .teams { flex:1;color:#444; }
+    .pick-badge { display:inline-block;padding:2px 8px;border-radius:5px;font-weight:700;font-size:.78rem;white-space:nowrap; }
+    .badge-1 { background:var(--p1-bg);color:var(--p1-tx); } .badge-X { background:var(--pX-bg);color:var(--pX-tx); }
+    .badge-2 { background:var(--p2-bg);color:var(--p2-tx); } .badge-none { background:#f0f0f0;color:#aaa; }
+
+    /* Admin */
+    .admin-day { font-weight:700;color:var(--green-dark);font-size:.85rem;margin:14px 0 6px; }
+    .admin-row { display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f4f4f4;font-size:.85rem; }
+    .admin-row:last-child { border-bottom:none; }
+    .admin-row .num { width:22px;text-align:center;color:#bbb;font-size:.75rem; }
+    .admin-row .teams { flex:1;color:#333; }
+    .admin-btns { display:flex;gap:4px; }
+    .admin-pick { padding:4px 10px;border-radius:6px;border:2px solid #ddd;background:#fff;
+      font-weight:700;font-size:.8rem;cursor:pointer;transition:all .15s;color:#666; }
+    .admin-pick:hover { border-color:var(--green);color:var(--green); }
+    .admin-pick.sel-1 { background:var(--p1-bg);border-color:var(--p1-br);color:var(--p1-tx); }
+    .admin-pick.sel-X { background:var(--pX-bg);border-color:var(--pX-br);color:var(--pX-tx); }
+    .admin-pick.sel-2 { background:var(--p2-bg);border-color:var(--p2-br);color:var(--p2-tx); }
+    .admin-team-input { border:1px solid #ddd;border-radius:6px;padding:3px 7px;font-size:.82rem;width:120px; }
+
+    /* Modals */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+      align-items:center;justify-content:center;z-index:1000;padding:20px; }
+    .modal-overlay.hidden { display:none; }
+    .modal-box { background:#fff;border-radius:16px;padding:26px;max-width:440px;width:100%;
+      max-height:85vh;overflow-y:auto; }
+    .modal-box.wide { max-width:620px; }
+    .modal-box h3 { font-size:1.1rem;margin-bottom:10px; }
+    .modal-box p  { color:#666;margin-bottom:16px;font-size:.92rem; }
+    .modal-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:14px; }
+    .close-btn { background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888; }
+    .modal-footer { display:flex;gap:10px;margin-top:16px; }
+    .modal-footer .btn { flex:1; }
+
+    /* Toast */
+    .toast { position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:#333;color:#fff;
+      padding:9px 20px;border-radius:20px;font-size:.88rem;z-index:3000;pointer-events:none;
+      animation:toastAnim 3s ease forwards; }
+    @keyframes toastAnim {
+      0%   { opacity:0;transform:translateX(-50%) translateY(8px); }
+      12%  { opacity:1;transform:translateX(-50%) translateY(0); }
+      70%  { opacity:1; }
+      100% { opacity:0; }
+    }
+    #adminGear { position:fixed;bottom:14px;right:14px;background:rgba(0,0,0,.25);
+      color:rgba(255,255,255,.4);border:none;border-radius:50%;width:34px;height:34px;
+      cursor:pointer;font-size:.9rem;transition:all .2s;display:none;z-index:200; }
+    #adminGear:hover { background:rgba(0,0,0,.5);color:#fff; }
+    .auto-status { font-size:.75rem;color:#aaa;text-align:right;margin-top:6px; }
+    .empty-state { text-align:center;padding:28px 16px;color:#aaa; }
+    .empty-state .big { font-size:2.5rem;margin-bottom:8px; }
+    .rules-warning { background:#fff3e0;border-left:4px solid #f57c00;padding:10px 14px;
+      border-radius:6px;font-size:.82rem;color:#555;margin-bottom:14px; }
+
+    /* Compare table */
+    .cmp-table { border-collapse:collapse;font-size:.78rem;white-space:nowrap; }
+    .cmp-table th { background:var(--green-dark);color:#fff;padding:6px 8px;text-align:center;
+      position:sticky;top:0;z-index:10;font-size:.72rem; }
+    .cmp-table th.col-match { position:sticky;left:0;z-index:20;text-align:left;min-width:140px;max-width:190px;white-space:normal; }
+    .cmp-table td { padding:4px 6px;border-bottom:1px solid #eee;vertical-align:middle;text-align:center; }
+    .cmp-table td.col-match { position:sticky;left:0;background:#fff;z-index:5;text-align:left;
+      font-size:.73rem;border-right:2px solid #ddd;padding:5px 8px;white-space:normal; }
+    .cmp-table td.col-match.phase-locked { background:#fafafa; }
+    .cmp-table tr:nth-child(even) td { background:#f9f9f9; }
+    .cmp-table tr:nth-child(even) td.col-match { background:#f9f9f9; }
+    .cmp-table tr.phase-row td { background:var(--green);color:#fff;font-weight:700;
+      font-size:.72rem;padding:5px 10px;position:sticky;left:0; }
+    .cmp-cell { display:inline-flex;align-items:center;justify-content:center;
+      width:32px;height:24px;border-radius:5px;font-weight:700;font-size:.78rem;border:1.5px solid transparent; }
+    .cmp-1 { background:var(--p1-bg);border-color:var(--p1-br);color:var(--p1-tx); }
+    .cmp-X { background:var(--pX-bg);border-color:var(--pX-br);color:var(--pX-tx); }
+    .cmp-2 { background:var(--p2-bg);border-color:var(--p2-br);color:var(--p2-tx); }
+    .cmp-none { background:#f4f4f4;color:#ccc;border-color:#e0e0e0; }
+    .cmp-table td.result-col { border-left:2px solid #ddd;border-right:2px solid #ddd;background:#fffde7 !important; }
+    .result-badge { display:inline-flex;align-items:center;justify-content:center;
+      width:32px;height:24px;border-radius:5px;font-weight:800;font-size:.82rem;
+      background:#fff9c4;border:1.5px solid #f9a825;color:#f57f17; }
+    .cmp-score-row td { background:#e8f5e9 !important;font-weight:700;font-size:.78rem;color:var(--green-dark); }
+    .cmp-score-row td.col-match { background:#e8f5e9 !important; }
+
+    @media(max-width:480px){
+      .welcome-hero h1{font-size:1.4rem;} .match-card{padding:10px;gap:7px;}
+      .pick-btn{width:32px;height:32px;font-size:.78rem;} .match-teams .t1,.match-teams .t2{font-size:.82rem;}
+      .match-num{display:none;}
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div id="loadingMsg">Cargando quiniela...</div>
+</div>
+
+<header id="appHeader">
+  <div class="hrow1">
+    <div class="header-title">⚽ Quiniela Familia Vives y Asociados
+      <div class="header-sub">Mundial 2026</div>
+    </div>
+    <div class="header-user" id="headerUser"></div>
+    <nav class="header-nav">
+      <button class="nav-btn" id="navPred"     onclick="showScreen('predictions')">Mis pronósticos</button>
+      <button class="nav-btn" id="navLb"       onclick="showScreen('leaderboard')">Clasificación</button>
+      <button class="nav-btn" id="navCompare"  onclick="showScreen('compare')">📊 Comparar</button>
+    </nav>
+  </div>
+  <div class="phase-pills" id="headerPills"></div>
+</header>
+
+<!-- ════ WELCOME ════ -->
+<div class="screen active" id="screenWelcome">
+  <div class="container">
+    <div class="welcome-hero">
+      <div class="emoji">🏆</div>
+      <h1>Quiniela Familia Vives y Asociados</h1>
+      <p class="tagline">Mundial 2026 · Fase de Grupos + Eliminatoria · 102 partidos</p>
+      <p class="sub">¡El que más acierta, gana!</p>
+    </div>
+    <div class="card login-card">
+      <h2>Introduce tu nombre</h2>
+      <div class="input-group">
+        <label for="nameInput">Nombre / Alias</label>
+        <input type="text" id="nameInput" placeholder="Ej: Juanito, El Crack, Familia Vives…"
+               maxlength="30" autocomplete="name" onkeyup="if(event.key==='Enter') handleLogin()">
+      </div>
+      <button class="btn btn-primary" onclick="handleLogin()" id="loginBtn">Entrar a la quiniela →</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+    <div style="text-align:center;padding-bottom:36px;">
+      <button class="nav-btn" onclick="viewLeaderboardPublic()"
+        style="background:rgba(255,255,255,.15);font-size:.85rem;padding:8px 18px">
+        Ver clasificación sin entrar →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ PREDICTIONS ════ -->
+<div class="screen" id="screenPredictions">
+  <div class="container">
+    <div class="progress-wrap">
+      <span class="progress-text" id="progressCount">0 / 102</span>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+      <span class="progress-text" id="progressPct">0%</span>
+    </div>
+    <div id="lockedBanner" class="locked-banner" style="display:none">
+      🔒 Todos los pronósticos están cerrados.
+    </div>
+    <div id="matchList"></div>
+    <div style="height:70px"></div>
+  </div>
+  <div id="saveBar">
+    <div id="saveStatus">Elige tus pronósticos y guarda</div>
+    <button class="btn btn-gold" id="saveBtn" onclick="savePredictions()">💾 Guardar</button>
+  </div>
+</div>
+
+<!-- ════ LEADERBOARD ════ -->
+<div class="screen" id="screenLeaderboard">
+  <div class="container" style="padding-top:20px">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 style="margin-bottom:0">🏆 Clasificación</h2>
+        <button class="btn btn-secondary btn-sm" onclick="loadLeaderboard()">↻ Actualizar</button>
+      </div>
+      <div id="leaderboardContent"><div class="empty-state"><div class="big">⏳</div>Cargando…</div></div>
+      <div class="auto-status" id="autoStatus">Resultados: <span id="resultsCount">0</span> / 102 partidos</div>
+    </div>
+    <div class="card" id="myPicksCard" style="display:none">
+      <h3>📋 Mis pronósticos vs. resultado</h3>
+      <div id="myPicksContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ COMPARE ════ -->
+<div class="screen" id="screenCompare">
+  <div style="padding:16px 16px 80px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="color:#fff;font-weight:700;font-size:1rem">📊 Pronósticos de todos</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadCompareView()">↻ Actualizar</button>
+    </div>
+    <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;color:rgba(255,255,255,.7);font-size:.78rem;margin-bottom:12px">
+      <span style="display:inline-block;width:28px;height:16px;background:var(--p1-bg);border:1px solid var(--p1-br);border-radius:3px;vertical-align:middle;margin-right:4px"></span>1 · victoria local &nbsp;
+      <span style="display:inline-block;width:28px;height:16px;background:var(--pX-bg);border:1px solid var(--pX-br);border-radius:3px;vertical-align:middle;margin-right:4px"></span>X · empate &nbsp;
+      <span style="display:inline-block;width:28px;height:16px;background:var(--p2-bg);border:1px solid var(--p2-br);border-radius:3px;vertical-align:middle;margin-right:4px"></span>2 · victoria visitante &nbsp;
+      <span style="margin-left:8px">✅ acierto · ❌ fallo</span>
+    </div>
+    <div id="compareContent" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">⏳</div>Cargando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL: Admin password ════ -->
+<div class="modal-overlay hidden" id="modalAdminPass">
+  <div class="modal-box">
+    <h3>🔐 Acceso de administrador</h3>
+    <p>Introduce la contraseña para gestionar resultados y equipos.</p>
+    <div class="input-group">
+      <input type="password" id="adminPassInput" placeholder="Contraseña"
+             onkeyup="if(event.key==='Enter') checkAdminPass()">
+    </div>
+    <div id="adminPassError" style="color:#e53935;font-size:.85rem;margin-bottom:8px;display:none">Contraseña incorrecta</div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modalAdminPass')">Cancelar</button>
+      <button class="btn btn-primary" onclick="checkAdminPass()">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ MODAL: Admin panel ════ -->
+<div class="modal-overlay hidden" id="modalAdmin">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3>⚙️ Panel de administrador</h3>
+      <button class="close-btn" onclick="closeModal('modalAdmin')">×</button>
+    </div>
+
+    <!-- Firestore rules warning -->
+    <div class="rules-warning" id="rulesWarning" style="display:none">
+      ⚠️ Las reglas de Firestore en modo prueba expiran pronto. Ve a Firebase Console → Firestore → Rules y extiéndelas hasta el 31 de julio de 2026.
+    </div>
+
+    <!-- Auto-fetch -->
+    <div style="background:#e8f5e9;border-radius:9px;padding:12px 14px;margin-bottom:14px;font-size:.85rem;">
+      <strong>🤖 Actualización automática de resultados</strong><br>
+      <span style="color:#555;">La app actualiza sola cuando alguien la abre (máx. cada hora).</span>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="triggerManualFetch()">🔄 Actualizar ahora</button>
+        <span id="lastFetchLabel" style="font-size:.78rem;color:#aaa;"></span>
+      </div>
+    </div>
+
+    <!-- Lock -->
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:#fce4ec;border-radius:9px;margin-bottom:16px;">
+      <input type="checkbox" id="lockToggle" onchange="toggleLock()" style="width:17px;height:17px;cursor:pointer">
+      <label for="lockToggle" style="font-weight:600;color:#c62828;cursor:pointer;font-size:.88rem">
+        🔒 Cerrar TODOS los pronósticos manualmente
+      </label>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" id="tabResultsBtn"      onclick="adminTab('results')"      style="width:auto;flex:1">Resultados</button>
+      <button class="btn btn-secondary btn-sm" id="tabTeamsBtn"      onclick="adminTab('teams')"        style="flex:1">Equipos KO</button>
+      <button class="btn btn-secondary btn-sm" id="tabParticipantBtn" onclick="adminTab('participant')" style="flex:1">👤 Participantes</button>
+    </div>
+
+    <div id="adminTabResults">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="clearFutureResults()"
+          title="Borra los resultados de todos los partidos que todavía no se han jugado"
+          style="font-size:.75rem;color:#c62828;border-color:#c62828;">
+          🗑️ Limpiar no jugados
+        </button>
+      </div>
+      <div id="adminMatchList"></div>
+    </div>
+    <div id="adminTabTeams" style="display:none">
+      <div style="font-size:.82rem;color:#555;margin-bottom:10px;padding:8px;background:#f5f5f5;border-radius:6px;">
+        Rellena los equipos que juegan en cada partido de eliminatoria (disponible tras la Jornada 3).
+        Los resultados automáticos también rellenan estos nombres.
+      </div>
+      <div id="adminTeamList"></div>
+    </div>
+    <div id="adminTabParticipant" style="display:none">
+      <div style="background:#fff3e0;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.82rem;color:#7b4600;">
+        ⚠️ Usa esta sección para añadir o editar los pronósticos de un participante manualmente (p.ej. Sofía).
+        Solo podrás editar fases que siguen abiertas o que el admin decida introducir.
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="adminPartName" placeholder="Nombre del participante (ej: Sofia)"
+          style="flex:1;padding:8px 12px;border:2px solid #ddd;border-radius:8px;font-size:.9rem;min-width:160px">
+        <button class="btn btn-secondary btn-sm" onclick="loadParticipantAdmin()" style="white-space:nowrap">Cargar / Crear</button>
+      </div>
+      <div id="adminPartInfo" style="font-size:.82rem;color:#888;margin-bottom:10px;display:none"></div>
+      <div id="adminPartPickList" style="display:none">
+        <div id="adminPartMatches"></div>
+        <button class="btn btn-primary" onclick="saveParticipantAdmin()" style="margin-top:12px">💾 Guardar pronósticos de este participante</button>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="adminSaveAllBtn" onclick="saveAdminData()" style="margin-top:14px">✅ Guardar todo</button>
+  </div>
+</div>
+
+<button id="adminGear" onclick="showAdminPass()" title="Administrador">⚙️</button>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIGURACIÓN  (editar aquí)
+// ═══════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyDpNakxmNmZBPEsE-tsDS4CSK7VC1bDV-E",
+  authDomain:        "vives-quiniela-mundial-2026.firebaseapp.com",
+  projectId:         "vives-quiniela-mundial-2026",
+  storageBucket:     "vives-quiniela-mundial-2026.firebasestorage.app",
+  messagingSenderId: "81912204937",
+  appId:             "1:81912204937:web:73063430e5a74501bf4058"
+};
+
+const ADMIN_PASSWORD = "mundial2026admin";
+
+// ⚠️  Pega aquí tu clave gratuita de https://www.football-data.org/client/register
+const FOOTBALL_DATA_KEY = "1262cda678fd49f889008e72a8b771e1";
+
+// ── Plazos por fase (hora CDMX = UTC-5 en verano) ──
+const PHASES = [
+  {num:1, label:"Ronda 1 de Fase de Grupos (11-17 Jun)", minId:1,   maxId:24,  pts:1,  ko:false, deadline:new Date("2026-06-11T05:00:00Z")},
+  {num:2, label:"Ronda 2 de Fase de Grupos (18-23 Jun)", minId:25,  maxId:48,  pts:1,  ko:false, deadline:new Date("2026-06-18T05:00:00Z")},
+  {num:3, label:"Ronda 3 de Fase de Grupos (24-27 Jun)", minId:49,  maxId:70,  pts:1,  ko:false, deadline:new Date("2026-06-24T05:00:00Z")},
+  // ⚠️ Deadlines = 5 min antes del primer partido de cada fase (hora CDMX = UTC-5)
+  {num:4, label:"Dieciseisavos (29 Jun-2 Jul)",          minId:72,  maxId:86,  pts:1,  ko:true,  deadline:new Date("2026-06-29T16:55:00Z")}, // primer partido lunes 29 jun ~11:55 CDMX — ajustar si hace falta
+  {num:5, label:"Octavos de final (4-7 Jul)",            minId:87,  maxId:94,  pts:2,  ko:true,  deadline:new Date("2026-07-04T16:55:00Z")},
+  {num:6, label:"Cuartos de final (9-10 Jul)",           minId:95,  maxId:98,  pts:4,  ko:true,  deadline:new Date("2026-07-09T16:55:00Z")},
+  {num:7, label:"Semifinales (14-15 Jul)",               minId:99,  maxId:100, pts:8,  ko:true,  deadline:new Date("2026-07-14T16:55:00Z")},
+  {num:8, label:"3er y 4º puesto (18 Jul)",              minId:101, maxId:101, pts:8,  ko:true,  deadline:new Date("2026-07-18T16:55:00Z")},
+  {num:9, label:"Final (19 Jul)",                        minId:102, maxId:102, pts:16, ko:true,  deadline:new Date("2026-07-19T16:55:00Z")},
+];
+
+// ── Partidos ──
+const MATCHES = [
+  // ── JORNADA 1 ──────────────────────────────────────────
+  {id:1,  g:"A",date:"11-Jun",team1:"MÉXICO",          team2:"SUDÁFRICA",       day:"JUEVES 11 Jun"},
+  {id:2,  g:"A",date:"11-Jun",team1:"COREA DEL SUR",   team2:"REPÚBLICA CHECA", day:"JUEVES 11 Jun"},
+  {id:3,  g:"B",date:"12-Jun",team1:"CANADÁ",          team2:"BOSNIA",          day:"VIERNES 12 Jun"},
+  {id:4,  g:"D",date:"12-Jun",team1:"ESTADOS UNIDOS",  team2:"PARAGUAY",        day:"VIERNES 12 Jun"},
+  {id:5,  g:"B",date:"13-Jun",team1:"QATAR",           team2:"SUIZA",           day:"SÁBADO 13 Jun"},
+  {id:6,  g:"C",date:"13-Jun",team1:"BRASIL",          team2:"MARRUECOS",       day:"SÁBADO 13 Jun"},
+  {id:7,  g:"C",date:"13-Jun",team1:"HAITÍ",           team2:"ESCOCIA",         day:"SÁBADO 13 Jun"},
+  {id:8,  g:"D",date:"13-Jun",team1:"AUSTRALIA",       team2:"TURQUÍA",         day:"SÁBADO 13 Jun"},
+  {id:9,  g:"E",date:"14-Jun",team1:"ALEMANIA",        team2:"CURAZAO",         day:"DOMINGO 14 Jun"},
+  {id:10, g:"F",date:"14-Jun",team1:"PAÍSES BAJOS",    team2:"JAPÓN",           day:"DOMINGO 14 Jun"},
+  {id:11, g:"E",date:"14-Jun",team1:"COSTA DE MARFIL", team2:"ECUADOR",         day:"DOMINGO 14 Jun"},
+  {id:12, g:"F",date:"14-Jun",team1:"SUECIA",          team2:"TÚNEZ",           day:"DOMINGO 14 Jun"},
+  {id:13, g:"H",date:"15-Jun",team1:"ESPAÑA",          team2:"CABO VERDE",      day:"LUNES 15 Jun"},
+  {id:14, g:"G",date:"15-Jun",team1:"BÉLGICA",         team2:"EGIPTO",          day:"LUNES 15 Jun"},
+  {id:15, g:"H",date:"15-Jun",team1:"ARABIA SAUDÍ",    team2:"URUGUAY",         day:"LUNES 15 Jun"},
+  {id:16, g:"G",date:"15-Jun",team1:"IRÁN",            team2:"NUEVA ZELANDA",   day:"LUNES 15 Jun"},
+  {id:17, g:"I",date:"16-Jun",team1:"FRANCIA",         team2:"SENEGAL",         day:"MARTES 16 Jun"},
+  {id:18, g:"I",date:"16-Jun",team1:"IRAK",            team2:"NORUEGA",         day:"MARTES 16 Jun"},
+  {id:19, g:"J",date:"16-Jun",team1:"ARGENTINA",       team2:"ARGELIA",         day:"MARTES 16 Jun"},
+  {id:20, g:"J",date:"16-Jun",team1:"AUSTRIA",         team2:"JORDANIA",        day:"MARTES 16 Jun"},
+  {id:21, g:"K",date:"17-Jun",team1:"PORTUGAL",        team2:"R.D. CONGO",      day:"MIÉRCOLES 17 Jun"},
+  {id:22, g:"L",date:"17-Jun",team1:"INGLATERRA",      team2:"CROACIA",         day:"MIÉRCOLES 17 Jun"},
+  {id:23, g:"L",date:"17-Jun",team1:"GHANA",           team2:"PANAMÁ",          day:"MIÉRCOLES 17 Jun"},
+  {id:24, g:"K",date:"17-Jun",team1:"UZBEKISTÁN",      team2:"COLOMBIA",        day:"MIÉRCOLES 17 Jun"},
+  // ── JORNADA 2 ──────────────────────────────────────────
+  {id:25, g:"A",date:"18-Jun",team1:"REPÚBLICA CHECA", team2:"SUDÁFRICA",       day:"JUEVES 18 Jun"},
+  {id:26, g:"B",date:"18-Jun",team1:"SUIZA",           team2:"BOSNIA",          day:"JUEVES 18 Jun"},
+  {id:27, g:"B",date:"18-Jun",team1:"CANADÁ",          team2:"QATAR",           day:"JUEVES 18 Jun"},
+  {id:28, g:"A",date:"18-Jun",team1:"MÉXICO",          team2:"COREA DEL SUR",   day:"JUEVES 18 Jun"},
+  {id:29, g:"D",date:"19-Jun",team1:"ESTADOS UNIDOS",  team2:"AUSTRALIA",       day:"VIERNES 19 Jun"},
+  {id:30, g:"C",date:"19-Jun",team1:"ESCOCIA",         team2:"MARRUECOS",       day:"VIERNES 19 Jun"},
+  {id:31, g:"C",date:"19-Jun",team1:"BRASIL",          team2:"HAITÍ",           day:"VIERNES 19 Jun"},
+  {id:32, g:"D",date:"19-Jun",team1:"TURQUÍA",         team2:"PARAGUAY",        day:"VIERNES 19 Jun"},
+  {id:33, g:"F",date:"20-Jun",team1:"PAÍSES BAJOS",    team2:"SUECIA",          day:"SÁBADO 20 Jun"},
+  {id:34, g:"E",date:"20-Jun",team1:"ALEMANIA",        team2:"COSTA DE MARFIL", day:"SÁBADO 20 Jun"},
+  {id:35, g:"E",date:"20-Jun",team1:"ECUADOR",         team2:"CURAZAO",         day:"SÁBADO 20 Jun"},
+  {id:36, g:"F",date:"20-Jun",team1:"TÚNEZ",           team2:"JAPÓN",           day:"SÁBADO 20 Jun"},
+  {id:37, g:"H",date:"21-Jun",team1:"ESPAÑA",          team2:"ARABIA SAUDÍ",    day:"DOMINGO 21 Jun"},
+  {id:38, g:"G",date:"21-Jun",team1:"BÉLGICA",         team2:"IRÁN",            day:"DOMINGO 21 Jun"},
+  {id:39, g:"H",date:"21-Jun",team1:"URUGUAY",         team2:"CABO VERDE",      day:"DOMINGO 21 Jun"},
+  {id:40, g:"G",date:"21-Jun",team1:"NUEVA ZELANDA",   team2:"EGIPTO",          day:"DOMINGO 21 Jun"},
+  {id:41, g:"J",date:"22-Jun",team1:"ARGENTINA",       team2:"AUSTRIA",         day:"LUNES 22 Jun"},
+  {id:42, g:"I",date:"22-Jun",team1:"FRANCIA",         team2:"IRAK",            day:"LUNES 22 Jun"},
+  {id:43, g:"I",date:"22-Jun",team1:"NORUEGA",         team2:"SENEGAL",         day:"LUNES 22 Jun"},
+  {id:44, g:"J",date:"22-Jun",team1:"JORDANIA",        team2:"ARGELIA",         day:"LUNES 22 Jun"},
+  {id:45, g:"K",date:"23-Jun",team1:"PORTUGAL",        team2:"UZBEKISTÁN",      day:"MARTES 23 Jun"},
+  {id:46, g:"L",date:"23-Jun",team1:"INGLATERRA",      team2:"GHANA",           day:"MARTES 23 Jun"},
+  {id:47, g:"L",date:"23-Jun",team1:"PANAMÁ",          team2:"CROACIA",         day:"MARTES 23 Jun"},
+  {id:48, g:"K",date:"23-Jun",team1:"COLOMBIA",        team2:"R.D. CONGO",      day:"MARTES 23 Jun"},
+  // ── JORNADA 3 ──────────────────────────────────────────
+  {id:49, g:"B",date:"24-Jun",team1:"SUIZA",           team2:"CANADÁ",          day:"MIÉRCOLES 24 Jun"},
+  {id:50, g:"B",date:"24-Jun",team1:"BOSNIA",          team2:"QATAR",           day:"MIÉRCOLES 24 Jun"},
+  {id:51, g:"C",date:"24-Jun",team1:"ESCOCIA",         team2:"BRASIL",          day:"MIÉRCOLES 24 Jun"},
+  {id:52, g:"C",date:"24-Jun",team1:"MARRUECOS",       team2:"HAITÍ",           day:"MIÉRCOLES 24 Jun"},
+  {id:53, g:"A",date:"24-Jun",team1:"REPÚBLICA CHECA", team2:"MÉXICO",          day:"MIÉRCOLES 24 Jun"},
+  {id:54, g:"A",date:"24-Jun",team1:"SUDÁFRICA",       team2:"COREA DEL SUR",   day:"MIÉRCOLES 24 Jun"},
+  {id:55, g:"E",date:"25-Jun",team1:"CURAZAO",         team2:"COSTA DE MARFIL", day:"JUEVES 25 Jun"},
+  {id:56, g:"E",date:"25-Jun",team1:"ECUADOR",         team2:"ALEMANIA",        day:"JUEVES 25 Jun"},
+  {id:57, g:"F",date:"25-Jun",team1:"JAPÓN",           team2:"SUECIA",          day:"JUEVES 25 Jun"},
+  {id:58, g:"F",date:"25-Jun",team1:"TÚNEZ",           team2:"PAÍSES BAJOS",    day:"JUEVES 25 Jun"},
+  {id:59, g:"D",date:"25-Jun",team1:"TURQUÍA",         team2:"ESTADOS UNIDOS",  day:"JUEVES 25 Jun"},
+  {id:60, g:"D",date:"25-Jun",team1:"PARAGUAY",        team2:"AUSTRALIA",       day:"JUEVES 25 Jun"},
+  {id:61, g:"I",date:"26-Jun",team1:"NORUEGA",         team2:"FRANCIA",         day:"VIERNES 26 Jun"},
+  {id:62, g:"I",date:"26-Jun",team1:"SENEGAL",         team2:"IRAK",            day:"VIERNES 26 Jun"},
+  {id:63, g:"H",date:"26-Jun",team1:"CABO VERDE",      team2:"ARABIA SAUDÍ",    day:"VIERNES 26 Jun"},
+  {id:64, g:"H",date:"26-Jun",team1:"URUGUAY",         team2:"ESPAÑA",          day:"VIERNES 26 Jun"},
+  {id:65, g:"G",date:"26-Jun",team1:"EGIPTO",          team2:"IRÁN",            day:"VIERNES 26 Jun"},
+  {id:66, g:"G",date:"26-Jun",team1:"NUEVA ZELANDA",   team2:"BÉLGICA",         day:"VIERNES 26 Jun"},
+  {id:67, g:"L",date:"27-Jun",team1:"PANAMÁ",          team2:"INGLATERRA",      day:"SÁBADO 27 Jun"},
+  {id:68, g:"L",date:"27-Jun",team1:"CROACIA",         team2:"GHANA",           day:"SÁBADO 27 Jun"},
+  {id:69, g:"K",date:"27-Jun",team1:"COLOMBIA",        team2:"PORTUGAL",        day:"SÁBADO 27 Jun"},
+  {id:70, g:"K",date:"27-Jun",team1:"R.D. CONGO",      team2:"UZBEKISTÁN",      day:"SÁBADO 27 Jun"},
+  // ── DIECISEISAVOS ──────────────────────────────────────
+  // ID 71 (Sudáfrica vs Canadá) eliminado — jugado sin tiempo de quiniela
+  {id:72, g:"D16",date:"29-Jun",team1:"Por definir",team2:"Por definir",day:"LUNES 29 Jun",   tbd:true},
+  {id:73, g:"D16",date:"29-Jun",team1:"Por definir",team2:"Por definir",day:"LUNES 29 Jun",   tbd:true},
+  {id:74, g:"D16",date:"29-Jun",team1:"Por definir",team2:"Por definir",day:"LUNES 29 Jun",   tbd:true},
+  {id:75, g:"D16",date:"30-Jun",team1:"Por definir",team2:"Por definir",day:"MARTES 30 Jun",  tbd:true},
+  {id:76, g:"D16",date:"30-Jun",team1:"Por definir",team2:"Por definir",day:"MARTES 30 Jun",  tbd:true},
+  {id:77, g:"D16",date:"30-Jun",team1:"Por definir",team2:"Por definir",day:"MARTES 30 Jun",  tbd:true},
+  {id:78, g:"D16",date:"30-Jun",team1:"Por definir",team2:"Por definir",day:"MARTES 30 Jun",  tbd:true},
+  {id:79, g:"D16",date:"01-Jul",team1:"Por definir",team2:"Por definir",day:"MIÉRCOLES 1 Jul",tbd:true},
+  {id:80, g:"D16",date:"01-Jul",team1:"Por definir",team2:"Por definir",day:"MIÉRCOLES 1 Jul",tbd:true},
+  {id:81, g:"D16",date:"01-Jul",team1:"Por definir",team2:"Por definir",day:"MIÉRCOLES 1 Jul",tbd:true},
+  {id:82, g:"D16",date:"01-Jul",team1:"Por definir",team2:"Por definir",day:"MIÉRCOLES 1 Jul",tbd:true},
+  {id:83, g:"D16",date:"02-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 2 Jul",   tbd:true},
+  {id:84, g:"D16",date:"02-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 2 Jul",   tbd:true},
+  {id:85, g:"D16",date:"02-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 2 Jul",   tbd:true},
+  {id:86, g:"D16",date:"02-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 2 Jul",   tbd:true},
+  // ── OCTAVOS ────────────────────────────────────────────
+  {id:87, g:"OCT",date:"04-Jul",team1:"Por definir",team2:"Por definir",day:"SÁBADO 4 Jul",   tbd:true},
+  {id:88, g:"OCT",date:"04-Jul",team1:"Por definir",team2:"Por definir",day:"SÁBADO 4 Jul",   tbd:true},
+  {id:89, g:"OCT",date:"05-Jul",team1:"Por definir",team2:"Por definir",day:"DOMINGO 5 Jul",  tbd:true},
+  {id:90, g:"OCT",date:"05-Jul",team1:"Por definir",team2:"Por definir",day:"DOMINGO 5 Jul",  tbd:true},
+  {id:91, g:"OCT",date:"06-Jul",team1:"Por definir",team2:"Por definir",day:"LUNES 6 Jul",    tbd:true},
+  {id:92, g:"OCT",date:"06-Jul",team1:"Por definir",team2:"Por definir",day:"LUNES 6 Jul",    tbd:true},
+  {id:93, g:"OCT",date:"07-Jul",team1:"Por definir",team2:"Por definir",day:"MARTES 7 Jul",   tbd:true},
+  {id:94, g:"OCT",date:"07-Jul",team1:"Por definir",team2:"Por definir",day:"MARTES 7 Jul",   tbd:true},
+  // ── CUARTOS ────────────────────────────────────────────
+  {id:95, g:"CUA",date:"09-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 9 Jul",   tbd:true},
+  {id:96, g:"CUA",date:"09-Jul",team1:"Por definir",team2:"Por definir",day:"JUEVES 9 Jul",   tbd:true},
+  {id:97, g:"CUA",date:"10-Jul",team1:"Por definir",team2:"Por definir",day:"VIERNES 10 Jul", tbd:true},
+  {id:98, g:"CUA",date:"10-Jul",team1:"Por definir",team2:"Por definir",day:"VIERNES 10 Jul", tbd:true},
+  // ── SEMIS ──────────────────────────────────────────────
+  {id:99, g:"SF",date:"14-Jul",team1:"Por definir",team2:"Por definir",day:"MARTES 14 Jul",   tbd:true},
+  {id:100,g:"SF",date:"15-Jul",team1:"Por definir",team2:"Por definir",day:"MIÉRCOLES 15 Jul",tbd:true},
+  // ── 3er PUESTO + FINAL ─────────────────────────────────
+  {id:101,g:"3P",date:"18-Jul",team1:"Por definir",team2:"Por definir",day:"SÁBADO 18 Jul (3er puesto)",tbd:true},
+  {id:102,g:"FIN",date:"19-Jul",team1:"Por definir",team2:"Por definir",day:"DOMINGO 19 Jul · FINAL",   tbd:true},
+];
+
+// ── Mapeo de nombres de equipo API → interno ──
+const TEAM_API_MAP = {
+  "Mexico":"MÉXICO","South Africa":"SUDÁFRICA","Korea Republic":"COREA DEL SUR","South Korea":"COREA DEL SUR",
+  "Czech Republic":"REPÚBLICA CHECA","Czechia":"REPÚBLICA CHECA",
+  "Canada":"CANADÁ","Bosnia and Herzegovina":"BOSNIA","Bosnia & Herzegovina":"BOSNIA","Bosnia-Herzegovina":"BOSNIA",
+  "United States":"ESTADOS UNIDOS","USA":"ESTADOS UNIDOS","Qatar":"QATAR",
+  "Switzerland":"SUIZA","Brazil":"BRASIL","Morocco":"MARRUECOS","Haiti":"HAITÍ",
+  "Scotland":"ESCOCIA","Australia":"AUSTRALIA","Türkiye":"TURQUÍA","Turkey":"TURQUÍA",
+  "Germany":"ALEMANIA","Curaçao":"CURAZAO","Curacao":"CURAZAO",
+  "Netherlands":"PAÍSES BAJOS","Japan":"JAPÓN",
+  "Ivory Coast":"COSTA DE MARFIL","Côte D'Ivoire":"COSTA DE MARFIL","Cote D'Ivoire":"COSTA DE MARFIL",
+  "Sweden":"SUECIA","Tunisia":"TÚNEZ","Spain":"ESPAÑA","Cabo Verde":"CABO VERDE","Cape Verde":"CABO VERDE","Cape Verde Islands":"CABO VERDE",
+  "Belgium":"BÉLGICA","Egypt":"EGIPTO","Saudi Arabia":"ARABIA SAUDÍ",
+  "Uruguay":"URUGUAY","Iran":"IRÁN","New Zealand":"NUEVA ZELANDA","France":"FRANCIA",
+  "Senegal":"SENEGAL","Iraq":"IRAK","Norway":"NORUEGA","Argentina":"ARGENTINA",
+  "Algeria":"ARGELIA","Austria":"AUSTRIA","Jordan":"JORDANIA","Portugal":"PORTUGAL",
+  "Congo DR":"R.D. CONGO","DR Congo":"R.D. CONGO","Democratic Republic of Congo":"R.D. CONGO",
+  "England":"INGLATERRA","Croatia":"CROACIA","Ghana":"GHANA","Panama":"PANAMÁ",
+  "Uzbekistan":"UZBEKISTÁN","Colombia":"COLOMBIA","Ecuador":"ECUADOR","Paraguay":"PARAGUAY",
+};
+
+// football-data.org stage → PHASES num
+const STAGE_MAP = {
+  GROUP_STAGE:     null, // matched by team names
+  ROUND_OF_32:     4,
+  LAST_32:         4,   // alternative API name
+  ROUND_OF_16:     5,
+  LAST_16:         5,   // alternative API name
+  QUARTER_FINALS:  6,
+  SEMI_FINALS:     7,
+  THIRD_PLACE:     8,
+  FINAL:           9,   // fase 9, not 8
+};
+
+// ── App state ──
+let db = null;
+let currentUser = null;
+let predictions = {};
+let results     = {};
+let koTeams     = {};   // {matchId: {team1, team2}}  — set by auto-fetch or admin
+let isLocked    = false;
+let adminEdits  = {};
+let adminKoEdit = {};   // ko team edits in admin panel
+
+// ── Phase helpers ──
+function phaseForMatch(id) { return PHASES.find(p => id >= p.minId && id <= p.maxId); }
+function isMatchLocked(id) {
+  if (isLocked) return true;
+  const p = phaseForMatch(id); return p ? new Date() >= p.deadline : true;
+}
+function isAnyPhaseOpen() {
+  if (isLocked) return false;
+  const now = new Date(); return PHASES.some(p => now < p.deadline);
+}
+
+// Effective team names (overlay koTeams on top of TBD)
+function getTeams(m) {
+  if (!m.tbd) return { t1: m.team1, t2: m.team2, ready: true };
+  const k = koTeams[m.id];
+  if (k && k.t1 && k.t2 && k.t1 !== 'Por definir' && k.t2 !== 'Por definir')
+    return { t1: k.t1, t2: k.t2, ready: true };
+  return { t1: 'Por definir', t2: 'Por definir', ready: false };
+}
+
+// ── Firebase init ──
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+} catch(e) { console.error("Firebase init:", e.message); }
+
+function withTimeout(p, ms) {
+  return Promise.race([p, new Promise((_,r) => setTimeout(()=>r(new Error('timeout')),ms))]);
+}
+
+// ── Startup ──
+window.addEventListener('load', async () => {
+  if (location.hash === '#admin') document.getElementById('adminGear').style.display = 'block';
+
+  try { await withTimeout(loadGlobalSettings(), 7000); } catch(e) { console.warn('Settings timeout'); }
+
+  const savedId   = localStorage.getItem('q26_id');
+  const savedName = localStorage.getItem('q26_name');
+  if (savedId && savedName) {
+    currentUser = { id: savedId, name: savedName };
+    try { await withTimeout(loadUserPredictions(), 7000); } catch(e) { predictions = {}; }
+    showAppInterface();
+    showScreen('predictions');
+    // Auto-fetch in background (non-blocking)
+    autoFetchResults().catch(e => console.warn('auto-fetch:', e));
+  } else {
+    hideLoading();
+    autoFetchResults().catch(()=>{});
+  }
+});
+
+// ═══ SETTINGS ═══════════════════════════════════════════
+async function loadGlobalSettings() {
+  const snap = await db.collection('settings').doc('global').get();
+  if (snap.exists) {
+    const d = snap.data();
+    isLocked = !!d.locked;
+    if (d.results) results = d.results;
+    if (d.koTeams) koTeams = d.koTeams;
+  }
+}
+
+// ═══ AUTO-FETCH RESULTS ═════════════════════════════════
+async function autoFetchResults() {
+  if (!FOOTBALL_DATA_KEY) return;
+  const last = parseInt(localStorage.getItem('q26_lastFetch') || '0');
+  if (Date.now() - last < 3600000) return; // max once per hour
+
+  await fetchAndApplyResults();
+  localStorage.setItem('q26_lastFetch', Date.now().toString());
+}
+
+async function triggerManualFetch() {
+  if (!FOOTBALL_DATA_KEY) {
+    toast('⚠️ Pega tu clave de football-data.org en el archivo HTML (variable FOOTBALL_DATA_KEY)');
+    return;
+  }
+  const btn = document.querySelector('[onclick="triggerManualFetch()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Buscando…'; }
+  try {
+    await fetchAndApplyResults(true);
+    localStorage.setItem('q26_lastFetch', Date.now().toString());
+  } catch(e) {
+    console.error('fetch error:', e);
+    toast('❌ Error API: ' + e.message + ' — introduce resultados manualmente');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar ahora'; }
+    updateLastFetchLabel();
+  }
+}
+
+async function fetchAndApplyResults(verbose = false) {
+  const isNetlify = location.hostname.includes('netlify');
+  const isLocal   = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const url = isNetlify
+    ? '/.netlify/functions/wc-results'
+    : !isLocal
+    ? '/api/wc-results'          // Vercel (or any other host)
+    : `https://api.football-data.org/v4/competitions/WC/matches?season=2026`;
+  const headers = (!isLocal) ? {} : { 'X-Auth-Token': FOOTBALL_DATA_KEY };
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) {
+    const body = await resp.text().catch(()=>'');
+    throw new Error(`${resp.status} ${resp.statusText} — ${body.substring(0,120)}`);
+  }
+  const data = await resp.json();
+
+  let newResults = {};
+  let newKoTeams = {};
+
+  const allMatches = (data.matches || []).sort((a,b) => (a.utcDate||'').localeCompare(b.utcDate||''));
+
+  const EXCLUDED_LAST32_PAIRS = [['South Africa', 'Canada']];
+  function isExcludedLast32(stage, t1, t2) {
+    if (STAGE_MAP[stage] !== 4) return false;
+    return EXCLUDED_LAST32_PAIRS.some(([a, b]) =>
+      (t1 === a && t2 === b) || (t1 === b && t2 === a)
+    );
+  }
+
+  // ── Step 1: D16 (LAST_32) positional assignment ──────────────────────────────
+  // All D16 fixtures are published before the round starts → positional is safe.
+  const apiD16 = allMatches.filter(m =>
+    STAGE_MAP[m.stage||''] === 4 && m.homeTeam?.id && m.awayTeam?.id &&
+    !isExcludedLast32(m.stage, m.homeTeam.name, m.awayTeam.name)
+  );
+  const d16Slots = MATCHES.filter(mx => mx.id >= 72 && mx.id <= 86 && mx.tbd).sort((a,b) => a.id - b.id);
+  for (let i = 0; i < Math.min(apiD16.length, d16Slots.length); i++) {
+    const t1 = TEAM_API_MAP[apiD16[i].homeTeam?.name] || (apiD16[i].homeTeam?.name||'').toUpperCase();
+    const t2 = TEAM_API_MAP[apiD16[i].awayTeam?.name] || (apiD16[i].awayTeam?.name||'').toUpperCase();
+    newKoTeams[d16Slots[i].id] = { t1, t2 };
+  }
+
+  // ── Step 1b: Cleanup stale cross-phase D16 assignments ───────────────────────
+  const correctPairs = new Map();
+  for (const [idStr, v] of Object.entries(newKoTeams)) {
+    correctPairs.set(`${v.t1}|${v.t2}`, parseInt(idStr));
+    correctPairs.set(`${v.t2}|${v.t1}`, parseInt(idStr));
+  }
+  for (const m of MATCHES.filter(mx => mx.tbd && !newKoTeams[mx.id])) {
+    const k = koTeams[m.id];
+    if (!k || k.t1 === 'Por definir') continue;
+    const correctSlot = correctPairs.get(`${k.t1}|${k.t2}`);
+    if (correctSlot !== undefined && correctSlot !== m.id)
+      newKoTeams[m.id] = { t1: 'Por definir', t2: 'Por definir' };
+  }
+
+  const mergedKoTeams = { ...koTeams, ...newKoTeams };
+
+  // ── Step 0: Sanitize — remove KO results not confirmed FINISHED by API ────────
+  // If a result exists in Firebase for a match the API shows as TIMED/SCHEDULED,
+  // it was entered manually or is stale. Remove it so bracket derivation stays clean.
+  const apiFinishedKOPairs = new Set();
+  for (const m of allMatches) {
+    if (m.status !== 'FINISHED' || !m.homeTeam?.id || !m.awayTeam?.id) continue;
+    const ph = STAGE_MAP[m.stage||''];
+    if (!ph) continue; // skip GROUP_STAGE (null phase)
+    const t1 = TEAM_API_MAP[m.homeTeam.name] || m.homeTeam.name.toUpperCase();
+    const t2 = TEAM_API_MAP[m.awayTeam.name] || m.awayTeam.name.toUpperCase();
+    apiFinishedKOPairs.add(`${t1}|${t2}`);
+    apiFinishedKOPairs.add(`${t2}|${t1}`);
+  }
+  let sanitizedAny = false;
+  for (const m of MATCHES.filter(mx => mx.tbd)) {
+    const id = m.id;
+    if (results[id] === undefined && results[String(id)] === undefined) continue;
+    const k = mergedKoTeams[id];
+    const pair = (k && k.t1 && k.t1 !== 'Por definir') ? `${k.t1}|${k.t2}` : null;
+    if (!pair || !apiFinishedKOPairs.has(pair)) {
+      delete results[id];
+      delete results[String(id)];
+      sanitizedAny = true;
+    }
+  }
+
+  // ── Step 2: Bracket-based derivation for OCT / CUA / SF / 3RD / FIN ─────────
+  // Uses the hardcoded 2026 WC bracket to populate each slot from previous-round
+  // winners — no positional guessing, no slot-shifting when API publishes gradually.
+  // Looks up the API fixture for each pair to get the correct home/away ordering.
+  //
+  // Bracket verified from live API data (July 4 2026):
+  //   D16 slot → OCT slot  |  winners:
+  //   null(excl.)+74 → 87  |  Canada + Morocco
+  //   73+76          → 88  |  Paraguay + France
+  //   72+75          → 89  |  Brazil + Norway
+  //   77+78          → 90  |  Mexico + England
+  //   79+80          → 91  |  Belgium + USA
+  //   81+82          → 92  |  Spain + Portugal
+  //   84+85          → 93  |  Egypt + Argentina
+  //   83+86          → 94  |  Switzerland + Colombia
+
+  const BRACKET = {
+    // OCT (phase 5) — derived from D16 results
+    87:[null,74], 88:[73,76], 89:[72,75], 90:[77,78],
+    91:[79,80],   92:[81,82], 93:[84,85], 94:[83,86],
+    // CUA (phase 6) — winner of each OCT pair
+    95:[87,88], 96:[89,90], 97:[91,92], 98:[93,94],
+    // SF (phase 7) — winner of each CUA pair
+    99:[95,96], 100:[97,98],
+    // Final (phase 9) — winners of semis
+    102:[99,100],
+  };
+  // 3rd place (101) uses LOSERS of semis — handled separately below
+
+  // Build API fixture lookup (non-D16 KO stages) for correct home/away ordering
+  const apiKOByPair = new Map();
+  for (const m of allMatches) {
+    const ph = STAGE_MAP[m.stage||''];
+    if (!ph || ph < 5 || !m.homeTeam?.id || !m.awayTeam?.id) continue;
+    const t1 = TEAM_API_MAP[m.homeTeam.name] || m.homeTeam.name.toUpperCase();
+    const t2 = TEAM_API_MAP[m.awayTeam.name] || m.awayTeam.name.toUpperCase();
+    apiKOByPair.set(`${t1}|${t2}`, {t1, t2});
+    apiKOByPair.set(`${t2}|${t1}`, {t1, t2});
+  }
+
+  // applyBracket: populates mergedKoTeams (and newKoTeams) using mergedRes for winner lookup
+  function applyBracket(mergedRes) {
+    function getTeamFromSlot(slotId, wantLoser) {
+      if (slotId === null) return wantLoser ? null : 'CANADÁ'; // excluded SA/Canada; Canada won
+      const r = mergedRes[slotId], k = mergedKoTeams[slotId];
+      if (!r || !k || k.t1 === 'Por definir') return null;
+      const [w, l] = r === '1' ? [k.t1, k.t2] : [k.t2, k.t1];
+      return wantLoser ? l : w;
+    }
+    function fill(targetSlot, teamA, teamB) {
+      if (!teamA || !teamB) {
+        // Can't derive yet — clear any stale data so the slot shows "Por definir"
+        const cur = mergedKoTeams[targetSlot];
+        if (cur && cur.t1 && cur.t1 !== 'Por definir') {
+          newKoTeams[targetSlot] = { t1: 'Por definir', t2: 'Por definir' };
+          mergedKoTeams[targetSlot] = { t1: 'Por definir', t2: 'Por definir' };
+        }
+        return;
+      }
+      const cur = mergedKoTeams[targetSlot];
+      // Skip if slot already has exactly these two teams (either order)
+      if (cur && cur.t1 !== 'Por definir' &&
+          ((cur.t1 === teamA && cur.t2 === teamB) || (cur.t1 === teamB && cur.t2 === teamA))) return;
+      // Use API fixture for correct home/away ordering when available
+      const api = apiKOByPair.get(`${teamA}|${teamB}`) || apiKOByPair.get(`${teamB}|${teamA}`);
+      const t1 = api ? api.t1 : teamA;
+      const t2 = api ? api.t2 : teamB;
+      newKoTeams[targetSlot] = {t1, t2};
+      mergedKoTeams[targetSlot] = {t1, t2}; // update in-place so later rounds can use it
+    }
+
+    for (const [slot, [srcA, srcB]] of Object.entries(BRACKET))
+      fill(parseInt(slot), getTeamFromSlot(srcA, false), getTeamFromSlot(srcB, false));
+
+    // 3rd place: losers of both semis
+    fill(101, getTeamFromSlot(99, true), getTeamFromSlot(100, true));
+  }
+
+  // Pass A: use stored Firebase results (covers normal runs)
+  applyBracket(results);
+
+  // ── Step 3: Extract results for FINISHED matches ──────────────────────────────
+  const assignedResults = new Set(Object.keys(results).map(Number));
+  for (const m of allMatches) {
+    const stage = m.stage||'', status = m.status||'', apiWinner = m.score?.winner;
+    if (status !== 'FINISHED' || !apiWinner || apiWinner === 'null') continue;
+    const apiT1 = m.homeTeam?.name||'', apiT2 = m.awayTeam?.name||'';
+    let internalMatch = null;
+    if (stage === 'GROUP_STAGE') {
+      internalMatch = findMatchByAPITeams(apiT1, apiT2);
+    } else {
+      const t1 = TEAM_API_MAP[apiT1]||apiT1.toUpperCase();
+      const t2 = TEAM_API_MAP[apiT2]||apiT2.toUpperCase();
+      internalMatch = MATCHES.find(mx => {
+        const k = mergedKoTeams[mx.id];
+        return k && ((k.t1===t1&&k.t2===t2)||(k.t1===t2&&k.t2===t1));
+      });
+    }
+    if (!internalMatch || assignedResults.has(internalMatch.id)) continue;
+    const phase = phaseForMatch(internalMatch.id);
+    let result;
+    if (apiWinner === 'HOME_TEAM') result = '1';
+    else if (apiWinner === 'AWAY_TEAM') result = '2';
+    else if (apiWinner === 'DRAW' && !phase?.ko) result = 'X';
+    if (result) { newResults[internalMatch.id] = result; assignedResults.add(internalMatch.id); }
+  }
+
+  // Pass B: re-run bracket with freshly-found results (catches D16 results found in step 3)
+  applyBracket({...results, ...newResults});
+
+  // ── Save if anything changed ──────────────────────────────────────────────────
+  const hasNewResults = Object.keys(newResults).length > 0;
+  const hasNewTeams   = Object.entries(newKoTeams).some(([id, v]) => {
+    const ex = koTeams[id]; return !ex || ex.t1 !== v.t1 || ex.t2 !== v.t2;
+  });
+  // Compute nK before updating koTeams
+  const nK = Object.keys(newKoTeams).filter(id => {
+    const ex = koTeams[id]; return !ex || ex.t1 !== newKoTeams[id].t1;
+  }).length;
+  const hasNew = hasNewResults || hasNewTeams || sanitizedAny;
+
+  if (hasNew) {
+    results = {...results, ...newResults};
+    koTeams = {...koTeams, ...newKoTeams};
+    await db.collection('settings').doc('global').set({results, koTeams}, {merge: true});
+    await recomputeAllScores();
+    if (document.getElementById('screenPredictions').classList.contains('active')) renderMatchList();
+    const nR = Object.keys(newResults).length;
+    if (verbose || nR > 0) {
+      const parts = [];
+      if (nR > 0) parts.push(`${nR} resultado${nR>1?'s':''} nuevo${nR>1?'s':''}`);
+      if (nK > 0) parts.push(`${nK} equipo${nK>1?'s':''} de eliminatoria`);
+      toast(`🔄 Actualizado: ${parts.join(' · ')}`);
+    }
+  } else if (verbose) {
+    toast('✅ Todo actualizado — no hay resultados nuevos');
+  }
+}
+
+function findMatchByAPITeams(apiT1, apiT2) {
+  const n1 = TEAM_API_MAP[apiT1] || apiT1.toUpperCase().trim();
+  const n2 = TEAM_API_MAP[apiT2] || apiT2.toUpperCase().trim();
+  return MATCHES.find(m => {
+    const { t1, t2 } = getTeams(m);
+    return (t1 === n1 && t2 === n2) || (t1 === n2 && t2 === n1);
+  });
+}
+
+function matchDateToISO(d) {
+  const mo = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+  const [day, mon] = d.split('-');
+  return `2026-${String(mo[mon]).padStart(2,'0')}-${day.padStart(2,'0')}`;
+}
+
+async function recomputeAllScores() {
+  try {
+    const snap  = await db.collection('participants').get();
+    const batch = db.batch();
+    snap.forEach(doc => {
+      batch.update(doc.ref, { score: computeScore(doc.data().predictions || {}, results) });
+    });
+    await batch.commit();
+  } catch(e) { console.warn('recompute scores:', e); }
+}
+
+// ═══ SCORE (WEIGHTED) ════════════════════════════════════
+function computeScore(picks, res) {
+  let score = 0;
+  for (const [idStr, result] of Object.entries(res)) {
+    const id   = parseInt(idStr);
+    const pick = picks[idStr] ?? picks[id];
+    if (pick && pick === result) {
+      const phase = phaseForMatch(id);
+      score += phase ? phase.pts : 1;
+    }
+  }
+  return score;
+}
+
+// Maximum possible score (all matches with results set, full points)
+function maxPossibleScore(res) {
+  let max = 0;
+  for (const idStr of Object.keys(res)) {
+    const phase = phaseForMatch(parseInt(idStr));
+    max += phase ? phase.pts : 1;
+  }
+  return max;
+}
+
+// ═══ LOGIN ═══════════════════════════════════════════════
+async function handleLogin() {
+  const rawName = document.getElementById('nameInput').value.trim();
+  if (!rawName) return showLoginError('Por favor introduce tu nombre.');
+  if (rawName.length < 2) return showLoginError('Mínimo 2 caracteres.');
+
+  const name = rawName;
+  const id   = rawName.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+  if (!id) return showLoginError('Nombre no válido.');
+
+  showLoading();
+  document.getElementById('loginBtn').disabled = true;
+  try {
+    currentUser = { id, name };
+    await withTimeout(loadUserPredictions(), 8000);
+    localStorage.setItem('q26_id', id);
+    localStorage.setItem('q26_name', name);
+    showAppInterface();
+    showScreen('predictions');
+    autoFetchResults().catch(()=>{});
+  } catch(e) {
+    hideLoading();
+    document.getElementById('loginBtn').disabled = false;
+    showLoginError('Error de conexión. Inténtalo de nuevo.');
+  }
+}
+function showLoginError(msg) {
+  const el = document.getElementById('loginError'); el.textContent = msg; el.style.display = 'block';
+}
+
+// ═══ PREDICTIONS ════════════════════════════════════════
+async function loadUserPredictions() {
+  const snap = await db.collection('participants').doc(currentUser.id).get();
+  if (snap.exists && snap.data().predictions) {
+    predictions = snap.data().predictions;
+    if (snap.data().name) currentUser.name = snap.data().name;
+  } else {
+    predictions = {};
+    // Register the user immediately even if no picks yet,
+    // so they appear in the leaderboard and the admin can manage them.
+    await db.collection('participants').doc(currentUser.id).set({
+      name: currentUser.name,
+      predictions: {},
+      score: 0,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+}
+
+async function savePredictions() {
+  if (!isAnyPhaseOpen()) return toast('🔒 Todos los pronósticos están cerrados.');
+  if (!currentUser) return;
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = '⏳ Guardando…';
+  try {
+    await db.collection('participants').doc(currentUser.id).set({
+      name: currentUser.name,
+      predictions,
+      score: computeScore(predictions, results),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    toast('✅ Guardado correctamente');
+    updateSaveStatus('Guardado ✓');
+  } catch(e) {
+    toast('❌ Error al guardar. Inténtalo de nuevo.');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Guardar';
+  }
+}
+
+// ═══ UI HELPERS ══════════════════════════════════════════
+function showLoading(msg)  {
+  document.getElementById('loadingMsg').textContent = msg || 'Cargando quiniela...';
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+function hideLoading()  { document.getElementById('loadingOverlay').classList.add('hidden'); }
+
+function showAppInterface() {
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('headerUser').textContent  = '👤 ' + currentUser.name;
+  renderPhasePills();
+  renderMatchList();
+  hideLoading();
+}
+
+function renderPhasePills() {
+  const now = new Date();
+  const html = PHASES.map(p => {
+    const locked = isLocked || now >= p.deadline;
+    const cls = locked ? 'pill-locked' : 'pill-open';
+    const icon = locked ? '🔒' : '🟢';
+    return `<span class="phase-pill ${cls}">${icon} J${p.num}</span>`;
+  }).join('');
+  document.getElementById('headerPills').innerHTML = html;
+}
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (name === 'predictions') document.getElementById('navPred').classList.add('active');
+  if (name === 'leaderboard') { document.getElementById('navLb').classList.add('active'); loadLeaderboard(); }
+  if (name === 'compare')    { document.getElementById('navCompare').classList.add('active'); loadCompareView(); }
+}
+
+function viewLeaderboardPublic() {
+  currentUser = null; predictions = {};
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('headerUser').textContent  = '(visitante)';
+  document.getElementById('navPred').style.display   = 'none';
+  renderPhasePills();
+  showScreen('leaderboard');
+}
+
+function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function toast(msg) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+}
+function updateSaveStatus(msg) { document.getElementById('saveStatus').textContent = msg; }
+
+// ═══ RENDER MATCH LIST ═══════════════════════════════════
+function renderMatchList() {
+  const allLocked = !isAnyPhaseOpen();
+  document.getElementById('lockedBanner').style.display = allLocked ? 'block' : 'none';
+  document.getElementById('saveBtn').style.display      = allLocked ? 'none'  : 'block';
+
+  let html = ''; let lastPhase = 0; let lastDay = '';
+
+  MATCHES.forEach(m => {
+    const phase  = phaseForMatch(m.id);
+    const locked = isMatchLocked(m.id);
+    const teams  = getTeams(m);
+
+    if (phase && phase.num !== lastPhase) {
+      lastPhase = phase.num; lastDay = '';
+      const dl  = phase.deadline.toLocaleString('es-MX', {
+        timeZone:'America/Mexico_City', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'
+      });
+      const bc  = locked ? 'badge-locked' : 'badge-open';
+      const bi  = locked ? '🔒 Cerrada' : '🟢 Abierta';
+      html += `
+        <div class="phase-header">
+          ⚡ ${phase.label}
+          <span class="phase-badge ${bc}">${bi} · cierre ${dl} CDMX</span>
+          <span class="phase-badge badge-pts">${phase.pts} pto${phase.pts>1?'s':''} c/u</span>
+        </div>`;
+    }
+
+    if (m.day !== lastDay) {
+      html += `<div class="day-header">📅 ${m.day}</div>`;
+      lastDay = m.day;
+    }
+
+    const pick   = predictions[m.id] || predictions[String(m.id)] || '';
+    const locked2 = locked || (m.tbd && !teams.ready); // also locked if TBD
+    const s1 = pick==='1'?' sel-1':'', sX = pick==='X'?' sel-X':'', s2 = pick==='2'?' sel-2':'';
+    const dis = locked2 ? 'disabled' : '';
+    const gCls = m.tbd ? ' gko' + (locked ? ' glocked' : '') : (locked ? ' glocked' : '');
+    const cCls = locked ? ' locked-phase' : '';
+
+    // For knockout: only 1 and 2 buttons
+    const pickHtml = phase?.ko
+      ? `<button class="pick-btn${s1}" onclick="setPick(${m.id},'1')" ${dis} title="${teams.t1} avanza">1</button>
+         <button class="pick-btn${s2}" onclick="setPick(${m.id},'2')" ${dis} title="${teams.t2} avanza">2</button>`
+      : `<button class="pick-btn${s1}" onclick="setPick(${m.id},'1')" ${dis} title="${teams.t1} gana">1</button>
+         <button class="pick-btn${sX}" onclick="setPick(${m.id},'X')" ${dis} title="Empate">X</button>
+         <button class="pick-btn${s2}" onclick="setPick(${m.id},'2')" ${dis} title="${teams.t2} gana">2</button>`;
+
+    html += `
+      <div class="match-card${cCls}" id="mc${m.id}">
+        <span class="match-num">${m.id}</span>
+        <span class="match-group${gCls}">${m.g}</span>
+        <div class="match-teams">
+          <div class="t1">${escHtml(teams.t1)}</div>
+          <div class="vs">vs.</div>
+          <div class="t2">${escHtml(teams.t2)}</div>
+          ${m.tbd && !teams.ready ? '<div class="tbd-label">Equipos por confirmar</div>' : ''}
+        </div>
+        <div class="match-picks">${pickHtml}</div>
+      </div>`;
+  });
+
+  document.getElementById('matchList').innerHTML = html;
+  updateProgress();
+}
+
+function setPick(matchId, value) {
+  const m = MATCHES.find(x => x.id === matchId);
+  if (!m) return;
+  if (isMatchLocked(matchId)) return toast('🔒 Esta fase ya está cerrada.');
+  const teams = getTeams(m);
+  if (!teams.ready) return toast('⏳ Los equipos de este partido aún no están confirmados.');
+
+  predictions[matchId] = predictions[matchId] === value ? undefined : value;
+  if (!predictions[matchId]) delete predictions[matchId];
+
+  const card = document.getElementById('mc' + matchId);
+  if (!card) return;
+  const btns = card.querySelectorAll('.pick-btn');
+  const vals = phaseForMatch(matchId)?.ko ? ['1','2'] : ['1','X','2'];
+  btns.forEach((btn, i) => {
+    btn.className = 'pick-btn' + (predictions[matchId] === vals[i] ? ' sel-' + vals[i] : '');
+  });
+
+  updateProgress();
+  updateSaveStatus('Cambios sin guardar — pulsa Guardar');
+}
+
+function updateProgress() {
+  const pickable = MATCHES.filter(m => getTeams(m).ready).length;
+  const done = Object.keys(predictions).length;
+  const pct = pickable > 0 ? Math.round(done / pickable * 100) : 0;
+  document.getElementById('progressCount').textContent = `${done} / ${pickable}`;
+  document.getElementById('progressFill').style.width  = pct + '%';
+  document.getElementById('progressPct').textContent   = pct + '%';
+}
+
+// ═══ LEADERBOARD ════════════════════════════════════════
+async function loadLeaderboard() {
+  document.getElementById('leaderboardContent').innerHTML =
+    '<div class="empty-state"><div class="big">⏳</div>Cargando…</div>';
+  try {
+    const [partSnap, settSnap] = await Promise.all([
+      withTimeout(db.collection('participants').get(), 10000),
+      withTimeout(db.collection('settings').doc('global').get(), 10000)
+    ]);
+    const gr = settSnap.exists ? (settSnap.data().results || {}) : {};
+    const rc = Object.keys(gr).length;
+    const mp = maxPossibleScore(gr);
+    document.getElementById('resultsCount').textContent = rc;
+
+    const ppts = [];
+    partSnap.forEach(doc => {
+      const d = doc.data();
+      ppts.push({ id: doc.id, name: d.name, picks: d.predictions||{}, score: computeScore(d.predictions||{}, gr) });
+    });
+    ppts.sort((a,b) => b.score - a.score || a.name.localeCompare(b.name));
+
+    if (!ppts.length) {
+      document.getElementById('leaderboardContent').innerHTML =
+        '<div class="empty-state"><div class="big">🏜️</div>Aún no hay participantes.</div>';
+      return;
+    }
+
+    const medals = ['🥇','🥈','🥉'];
+    let html = '<table class="lb-table"><thead><tr><th>#</th><th>Participante</th><th>Puntos</th></tr></thead><tbody>';
+    ppts.forEach((p,i) => {
+      const isMe = currentUser && p.id === currentUser.id;
+      const pct  = mp > 0 ? ` (${Math.round(p.score/mp*100)}%)` : '';
+      html += `<tr${isMe?' class="my-row"':''}>
+        <td>${medals[i]||(i+1)}</td>
+        <td>${escHtml(p.name)}${isMe?' <span style="color:var(--green);font-size:.75rem">← tú</span>':''}</td>
+        <td>${mp>0?`<span class="score-big">${p.score}</span><span style="color:#aaa;font-size:.8rem"> / ${mp}${pct}</span>`:'<span class="pending-score">—</span>'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('leaderboardContent').innerHTML = html;
+
+    if (currentUser) {
+      const me = ppts.find(p => p.id === currentUser.id);
+      if (me) renderMyPicksDetail(me.picks, gr);
+    }
+  } catch(e) {
+    document.getElementById('leaderboardContent').innerHTML =
+      '<div class="empty-state"><div class="big">❌</div>Error al cargar. Comprueba tu conexión.</div>';
+  }
+}
+
+function renderMyPicksDetail(picks, res) {
+  const card = document.getElementById('myPicksCard');
+  if (!Object.keys(picks).length && !Object.keys(res).length) { card.style.display='none'; return; }
+  card.style.display = 'block';
+  let html=''; let lastPhase=0; let lastDay='';
+
+  MATCHES.forEach(m => {
+    const pick = picks[m.id] ?? picks[String(m.id)];
+    const result = res[m.id] ?? res[String(m.id)];
+    if (!pick && !result) return;
+    const phase = phaseForMatch(m.id);
+    if (phase && phase.num !== lastPhase) {
+      lastPhase = phase.num; lastDay = '';
+      html += `<div style="font-weight:700;color:var(--green-dark);font-size:.82rem;margin:14px 0 4px">⚡ ${phase.label}</div>`;
+    }
+    if (m.day !== lastDay) { html += `<div style="font-size:.75rem;color:#aaa;margin:8px 0 2px">📅 ${m.day}</div>`; lastDay = m.day; }
+    const { t1, t2 } = getTeams(m);
+    let icon = ''; if (result) icon = !pick?'⬜':pick===result?'✅':'❌';
+    const bc = pick ? `badge-${pick}` : 'badge-none';
+    const pl = pick==='1'?`1·${t1}`:pick==='X'?'X·Empate':pick==='2'?`2·${t2}`:'—';
+    html += `<div class="pick-row">
+      <div class="teams"><span style="color:#aaa;font-size:.72rem">[${m.g}]</span> ${escHtml(t1)} vs ${escHtml(t2)}</div>
+      <span class="pick-badge ${bc}">${escHtml(pl)}</span>
+      ${result?`<span style="font-size:.9rem">${icon}</span>`:''}
+    </div>`;
+  });
+  document.getElementById('myPicksContent').innerHTML = html || '<div style="color:#aaa;padding:10px 0;font-size:.85rem">Sin pronósticos guardados aún.</div>';
+}
+
+// ═══ ADMIN ═══════════════════════════════════════════════
+function showAdminPass() {
+  document.getElementById('adminPassInput').value = '';
+  document.getElementById('adminPassError').style.display = 'none';
+  openModal('modalAdminPass');
+  setTimeout(() => document.getElementById('adminPassInput').focus(), 100);
+}
+function checkAdminPass() {
+  if (document.getElementById('adminPassInput').value === ADMIN_PASSWORD) {
+    closeModal('modalAdminPass'); openAdminPanel();
+  } else { document.getElementById('adminPassError').style.display = 'block'; }
+}
+
+async function openAdminPanel() {
+  showLoading('Cargando panel…');
+  try {
+    const snap = await withTimeout(db.collection('settings').doc('global').get(), 8000);
+    if (snap.exists) { const d=snap.data(); isLocked=!!d.locked; results=d.results||{}; koTeams=d.koTeams||{}; }
+  } catch(e) { console.warn(e); }
+  adminEdits  = { ...results };
+  adminKoEdit = {};
+  Object.entries(koTeams).forEach(([id,v]) => { adminKoEdit[id] = { t1: v.t1||'', t2: v.t2||'' }; });
+
+  document.getElementById('lockToggle').checked = isLocked;
+
+  // Firestore rules warning (expires ~30 days after June 12 = July 12)
+  const rulesExpiry = new Date('2026-07-12');
+  document.getElementById('rulesWarning').style.display = new Date() > new Date('2026-07-05') && new Date() < rulesExpiry ? 'block' : 'none';
+
+  updateLastFetchLabel();
+  adminTab('results');
+  renderAdminMatchList();
+  renderAdminTeamList();
+  hideLoading();
+  openModal('modalAdmin');
+}
+
+function updateLastFetchLabel() {
+  const last = parseInt(localStorage.getItem('q26_lastFetch') || '0');
+  const el = document.getElementById('lastFetchLabel');
+  if (!el) return;
+  if (!last) { el.textContent = 'Nunca actualizado automáticamente'; return; }
+  const d = new Date(last);
+  el.textContent = `Última auto-actualización: ${d.toLocaleString('es-MX', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`;
+}
+
+function adminTab(tab) {
+  document.getElementById('adminTabResults').style.display     = tab === 'results'     ? 'block' : 'none';
+  document.getElementById('adminTabTeams').style.display       = tab === 'teams'       ? 'block' : 'none';
+  document.getElementById('adminTabParticipant').style.display = tab === 'participant' ? 'block' : 'none';
+  document.getElementById('adminSaveAllBtn').style.display     = tab === 'participant' ? 'none'  : 'block';
+  document.getElementById('tabResultsBtn').className      = 'btn btn-sm ' + (tab==='results'     ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('tabTeamsBtn').className        = 'btn btn-sm ' + (tab==='teams'       ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('tabParticipantBtn').className  = 'btn btn-sm ' + (tab==='participant' ? 'btn-primary' : 'btn-secondary');
+}
+
+// ── Admin: gestión manual de participante ──────────────
+let adminPartPicks = {};
+let adminPartId    = '';
+
+async function loadParticipantAdmin() {
+  const rawName = document.getElementById('adminPartName').value.trim();
+  if (!rawName) return toast('Introduce un nombre');
+  const id = rawName.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+  if (!id) return toast('Nombre no válido');
+
+  adminPartId    = id;
+  adminPartPicks = {};
+  const infoEl   = document.getElementById('adminPartInfo');
+  const pickDiv  = document.getElementById('adminPartPickList');
+  infoEl.style.display = 'block';
+  infoEl.textContent   = 'Cargando…';
+
+  try {
+    const snap = await db.collection('participants').doc(id).get();
+    if (snap.exists && snap.data().predictions) {
+      adminPartPicks = { ...snap.data().predictions };
+      infoEl.innerHTML = `✅ Participante existente: <strong>${snap.data().name || rawName}</strong> · ${Object.keys(adminPartPicks).length} pronósticos guardados`;
+    } else {
+      infoEl.innerHTML = `🆕 Nuevo participante: <strong>${rawName}</strong> (ID: ${id}) — no existe aún en la base de datos`;
+    }
+    // Store display name for save
+    adminPartId = id;
+    window._adminPartDisplayName = rawName;
+    renderAdminPartMatches();
+    pickDiv.style.display = 'block';
+  } catch(e) {
+    infoEl.textContent = 'Error al cargar: ' + e.message;
+  }
+}
+
+function renderAdminPartMatches() {
+  let html = ''; let lastPhase = 0; let lastDay = '';
+  MATCHES.forEach(m => {
+    const phase = phaseForMatch(m.id);
+    if (phase && phase.num !== lastPhase) {
+      lastPhase = phase.num; lastDay = '';
+      html += `<div class="admin-day">⚡ ${phase.label}</div>`;
+    }
+    if (m.day !== lastDay) { html += `<div style="font-size:.75rem;color:#aaa;margin:6px 0 3px">📅 ${m.day}</div>`; lastDay = m.day; }
+    const { t1, t2 } = getTeams(m);
+    const r = adminPartPicks[m.id] || adminPartPicks[String(m.id)] || '';
+    const s1=r==='1'?' sel-1':'', sX=r==='X'?' sel-X':'', s2=r==='2'?' sel-2':'';
+    const xBtn = phase?.ko ? '' : `<button class="admin-pick${sX}" onclick="setPartPick(${m.id},'X')">X</button>`;
+    html += `<div class="admin-row">
+      <span class="num">${m.id}</span>
+      <div class="teams">${escHtml(t1)} <span style="color:#aaa">vs</span> ${escHtml(t2)}</div>
+      <div class="admin-btns">
+        <button class="admin-pick${s1}" onclick="setPartPick(${m.id},'1')">1</button>
+        ${xBtn}
+        <button class="admin-pick${s2}" onclick="setPartPick(${m.id},'2')">2</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('adminPartMatches').innerHTML = html;
+}
+
+function setPartPick(id, val) {
+  adminPartPicks[id] = adminPartPicks[id] === val ? undefined : val;
+  if (!adminPartPicks[id]) delete adminPartPicks[id];
+  renderAdminPartMatches();
+}
+
+async function saveParticipantAdmin() {
+  if (!adminPartId) return toast('Carga primero un participante');
+  showLoading('Guardando participante…');
+  try {
+    await db.collection('participants').doc(adminPartId).set({
+      name: window._adminPartDisplayName || adminPartId,
+      predictions: adminPartPicks,
+      score: computeScore(adminPartPicks, results),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    toast(`✅ Pronósticos de ${window._adminPartDisplayName} guardados`);
+    document.getElementById('adminPartInfo').innerHTML =
+      `✅ Guardado correctamente · ${Object.keys(adminPartPicks).length} pronósticos`;
+  } catch(e) {
+    toast('❌ Error: ' + e.message);
+  } finally { hideLoading(); }
+}
+
+function renderAdminMatchList() {
+  let html=''; let lastDay='';
+  MATCHES.forEach(m => {
+    if (m.day !== lastDay) { html += `<div class="admin-day">📅 ${m.day}</div>`; lastDay = m.day; }
+    const { t1, t2 } = getTeams(m);
+    const r = adminEdits[m.id] || adminEdits[String(m.id)] || '';
+    const s1=r==='1'?' sel-1':'', sX=r==='X'?' sel-X':'', s2=r==='2'?' sel-2':'';
+    const xBtn = phaseForMatch(m.id)?.ko ? '' :
+      `<button class="admin-pick${sX}" onclick="setAdminPick(${m.id},'X')">X</button>`;
+    const clrBtn = r ? `<button class="admin-pick" onclick="clearAdminResult(${m.id})"
+      title="Borrar resultado" style="color:#c62828;border-color:#c62828;padding:4px 7px;">×</button>` : '';
+    html += `<div class="admin-row">
+      <span class="num">${m.id}</span>
+      <div class="teams">${escHtml(t1)} <span style="color:#aaa">vs</span> ${escHtml(t2)}</div>
+      <div class="admin-btns">
+        <button class="admin-pick${s1}" onclick="setAdminPick(${m.id},'1')">1</button>
+        ${xBtn}
+        <button class="admin-pick${s2}" onclick="setAdminPick(${m.id},'2')">2</button>
+        ${clrBtn}
+      </div>
+    </div>`;
+  });
+  document.getElementById('adminMatchList').innerHTML = html;
+}
+
+function setAdminPick(id, val) {
+  adminEdits[id] = adminEdits[id] === val ? undefined : val;
+  if (!adminEdits[id]) { delete adminEdits[id]; delete adminEdits[String(id)]; }
+  renderAdminMatchList();
+}
+
+function clearAdminResult(id) {
+  delete adminEdits[id];
+  delete adminEdits[String(id)];
+  renderAdminMatchList();
+}
+
+function clearFutureResults() {
+  // Clears results for all matches whose date is strictly after today
+  const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+  let cleared = 0;
+  for (const m of MATCHES) {
+    if (matchDateToISO(m.date) > todayStr) {
+      if (adminEdits[m.id] !== undefined || adminEdits[String(m.id)] !== undefined) {
+        delete adminEdits[m.id];
+        delete adminEdits[String(m.id)];
+        cleared++;
+      }
+    }
+  }
+  renderAdminMatchList();
+  toast(cleared > 0
+    ? `🗑️ ${cleared} resultado${cleared !== 1 ? 's' : ''} eliminado${cleared !== 1 ? 's' : ''}`
+    : '✅ No había resultados futuros que limpiar');
+}
+
+function renderAdminTeamList() {
+  const koMatches = MATCHES.filter(m => m.tbd);
+  let html=''; let lastDay='';
+  koMatches.forEach(m => {
+    if (m.day !== lastDay) { html += `<div class="admin-day">📅 ${m.day}</div>`; lastDay = m.day; }
+    // Show adminKoEdit override first, then existing koTeams data as fallback
+    const cur = adminKoEdit[m.id] || adminKoEdit[String(m.id)] || koTeams[m.id] || koTeams[String(m.id)] || {};
+    html += `<div class="admin-row">
+      <span class="num">${m.id}</span>
+      <input class="admin-team-input" placeholder="Equipo 1" id="ko_t1_${m.id}" value="${escHtml(cur.t1||'')}"
+             oninput="adminKoEdit[${m.id}]={t1:this.value,t2:document.getElementById('ko_t2_${m.id}').value}">
+      <span style="color:#aaa;font-size:.8rem">vs</span>
+      <input class="admin-team-input" placeholder="Equipo 2" id="ko_t2_${m.id}" value="${escHtml(cur.t2||'')}"
+             oninput="adminKoEdit[${m.id}]={t1:document.getElementById('ko_t1_${m.id}').value,t2:this.value}">
+    </div>`;
+  });
+  document.getElementById('adminTeamList').innerHTML = html;
+}
+
+async function toggleLock() {
+  isLocked = document.getElementById('lockToggle').checked;
+  try {
+    await db.collection('settings').doc('global').set({ locked: isLocked }, { merge: true });
+    toast(isLocked ? '🔒 Pronósticos cerrados' : '🔓 Pronósticos reabiertos');
+  } catch(e) { toast('Error al guardar estado'); }
+}
+
+async function saveAdminData() {
+  showLoading('Guardando…');
+  try {
+    // Merge ko team edits
+    const mergedKo = { ...koTeams };
+    Object.entries(adminKoEdit).forEach(([id, v]) => {
+      if (v.t1 || v.t2) mergedKo[id] = { t1: v.t1.trim().toUpperCase(), t2: v.t2.trim().toUpperCase() };
+    });
+
+    results  = { ...adminEdits };
+    koTeams  = mergedKo;
+
+    await db.collection('settings').doc('global').set({ results, koTeams }, { merge: true });
+    await recomputeAllScores();
+    // Re-fetch to sanitize stale results and re-derive bracket with correct data
+    localStorage.removeItem('q26_lastFetch');
+    await fetchAndApplyResults().catch(e => console.warn('post-save fetch:', e));
+    renderMatchList(); // refresh UI with new teams + results
+    toast('✅ Datos guardados y puntuaciones actualizadas');
+    closeModal('modalAdmin');
+  } catch(e) {
+    toast('❌ Error: ' + e.message); console.error(e);
+  } finally { hideLoading(); }
+}
+
+// ═══ COMPARE VIEW ════════════════════════════════════════
+async function loadCompareView() {
+  const el = document.getElementById('compareContent');
+  el.innerHTML = '<div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">⏳</div>Cargando…</div>';
+  try {
+    const [partSnap, settSnap] = await Promise.all([
+      withTimeout(db.collection('participants').get(), 10000),
+      withTimeout(db.collection('settings').doc('global').get(), 10000)
+    ]);
+    const res = settSnap.exists ? (settSnap.data().results || {}) : {};
+    const ko  = settSnap.exists ? (settSnap.data().koTeams  || {}) : {};
+    // Sync local koTeams
+    Object.assign(koTeams, ko);
+
+    const parts = [];
+    partSnap.forEach(doc => {
+      const d = doc.data();
+      parts.push({ id: doc.id, name: d.name || doc.id, picks: d.predictions || {} });
+    });
+    // Sort by score desc
+    parts.sort((a, b) => {
+      const sa = computeScore(a.picks, res), sb = computeScore(b.picks, res);
+      return sb - sa || a.name.localeCompare(b.name);
+    });
+
+    if (!parts.length) {
+      el.innerHTML = '<div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">🏜️</div>No hay participantes aún.</div>';
+      return;
+    }
+
+    // Solo mostrar partidos cuya fase ya esté cerrada (apuestas bloqueadas)
+    const relevantMatches = MATCHES.filter(m => {
+      if (!isMatchLocked(m.id)) return false; // fase abierta → ocultar
+      const id = m.id;
+      if (res[id] || res[String(id)]) return true;
+      return parts.some(p => p.picks[id] || p.picks[String(id)]);
+    });
+
+    if (!relevantMatches.length) {
+      el.innerHTML = '<div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">🔒</div><p>Los pronósticos de la fase actual aún están abiertos.</p><p style="font-size:.82rem;margin-top:6px">Los resultados de cada participante se revelan cuando se cierra la fase.</p></div>';
+      return;
+    }
+
+    // Build table
+    let html = `<table class="cmp-table">
+      <thead><tr>
+        <th class="col-match">Partido</th>
+        <th class="result-col" style="position:sticky;top:0;background:#f9a825;color:#5d3a00">Resultado</th>
+        ${parts.map(p => `<th title="${escHtml(p.name)}">${escHtml(p.name.length > 9 ? p.name.substring(0,8)+'…' : p.name)}</th>`).join('')}
+      </tr></thead><tbody>`;
+
+    let lastPhase = 0;
+    relevantMatches.forEach(m => {
+      const phase = phaseForMatch(m.id);
+      if (phase && phase.num !== lastPhase) {
+        lastPhase = phase.num;
+        html += `<tr class="phase-row"><td colspan="${parts.length + 2}">⚡ ${phase.label} · ${phase.pts} pto${phase.pts>1?'s':''} c/u</td></tr>`;
+      }
+      const { t1, t2 } = getTeams(m);
+      const actualResult = res[m.id] ?? res[String(m.id)];
+      const locked = isMatchLocked(m.id);
+      const matchLabel = `<span style="font-size:.7rem;color:#aaa">[${m.g}]</span><br>${escHtml(t1)}<span style="color:#aaa"> vs </span>${escHtml(t2)}`;
+      const resultCell = actualResult
+        ? `<span class="result-badge">${actualResult}</span>`
+        : `<span style="color:#ccc;font-size:.8rem">—</span>`;
+
+      html += `<tr>
+        <td class="col-match${locked?' phase-locked':''}">${matchLabel}</td>
+        <td class="result-col">${resultCell}</td>`;
+
+      parts.forEach(p => {
+        const pick = p.picks[m.id] ?? p.picks[String(m.id)];
+        let icon = '';
+        if (actualResult && pick) icon = pick === actualResult ? ' ✅' : ' ❌';
+        const cls = pick ? `cmp-${pick}` : 'cmp-none';
+        html += `<td><span class="cmp-cell ${cls}">${pick || '—'}${icon}</span></td>`;
+      });
+      html += '</tr>';
+    });
+
+    // Score row
+    const maxPts = maxPossibleScore(res);
+    html += `<tr class="cmp-score-row">
+      <td class="col-match">🏆 Puntos totales</td>
+      <td class="result-col" style="background:#e8f5e9 !important"></td>
+      ${parts.map(p => {
+        const s = computeScore(p.picks, res);
+        return `<td>${maxPts > 0 ? `<strong>${s}</strong><br><span style="color:#aaa;font-size:.68rem">${Math.round(s/maxPts*100)}%</span>` : '—'}</td>`;
+      }).join('')}
+    </tr>`;
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">❌</div>Error al cargar: ${e.message}</div>`;
+  }
+}
+
+// ═══ UTILS ═══════════════════════════════════════════════
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
