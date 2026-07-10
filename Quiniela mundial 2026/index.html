@@ -334,7 +334,7 @@
       <span style="display:inline-block;width:28px;height:16px;background:var(--p2-bg);border:1px solid var(--p2-br);border-radius:3px;vertical-align:middle;margin-right:4px"></span>2 · victoria visitante &nbsp;
       <span style="margin-left:8px">✅ acierto · ❌ fallo</span>
     </div>
-    <div id="compareContent" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <div id="compareContent" style="overflow:auto;max-height:calc(100vh - 185px);-webkit-overflow-scrolling:touch">
       <div class="empty-state" style="color:rgba(255,255,255,.5)"><div class="big">⏳</div>Cargando…</div>
     </div>
   </div>
@@ -911,6 +911,30 @@ async function fetchAndApplyResults(verbose = false) {
   // Pass B: re-run bracket with freshly-found results (catches D16 results found in step 3)
   applyBracket({...results, ...newResults});
 
+  // ── Step 3B: re-scan OCT+ for results that became resolvable after Pass B ────
+  // Handles the case where D16 results were just found in Step 3, making OCT teams
+  // available for the first time in this fetch cycle.
+  for (const m of allMatches) {
+    const stage = m.stage||'', status = m.status||'', apiWinner = m.score?.winner;
+    if (status !== 'FINISHED' || !apiWinner || apiWinner === 'null') continue;
+    const ph = STAGE_MAP[stage];
+    if (!ph || ph < 5) continue; // OCT and above only (skip GROUP_STAGE and D16)
+    const apiT1 = m.homeTeam?.name||'', apiT2 = m.awayTeam?.name||'';
+    const t1 = TEAM_API_MAP[apiT1]||apiT1.toUpperCase();
+    const t2 = TEAM_API_MAP[apiT2]||apiT2.toUpperCase();
+    const internalMatch = MATCHES.find(mx => {
+      const k = mergedKoTeams[mx.id];
+      return k && !assignedResults.has(mx.id) && ((k.t1===t1&&k.t2===t2)||(k.t1===t2&&k.t2===t1));
+    });
+    if (!internalMatch) continue;
+    let result;
+    if (apiWinner === 'HOME_TEAM') result = '1';
+    else if (apiWinner === 'AWAY_TEAM') result = '2';
+    if (result) { newResults[internalMatch.id] = result; assignedResults.add(internalMatch.id); }
+  }
+  // Pass C: update bracket with any OCT/CUA results found in Step 3B
+  applyBracket({...results, ...newResults});
+
   // ── Save if anything changed ──────────────────────────────────────────────────
   const hasNewResults = Object.keys(newResults).length > 0;
   const hasNewTeams   = Object.entries(newKoTeams).some(([id, v]) => {
@@ -1240,13 +1264,20 @@ async function loadLeaderboard() {
       return;
     }
 
-    const medals = ['🥇','🥈','🥉'];
+    const medals = {1:'🥇',2:'🥈',3:'🥉'};
+    // Compute tie-aware ranks: same score → same position number
+    const ranks = [];
+    ppts.forEach((p, i) => {
+      if (i === 0 || p.score < ppts[i-1].score) ranks.push(i + 1);
+      else ranks.push(ranks[i-1]);
+    });
     let html = '<table class="lb-table"><thead><tr><th>#</th><th>Participante</th><th>Puntos</th></tr></thead><tbody>';
     ppts.forEach((p,i) => {
       const isMe = currentUser && p.id === currentUser.id;
       const pct  = mp > 0 ? ` (${Math.round(p.score/mp*100)}%)` : '';
+      const rank = ranks[i];
       html += `<tr${isMe?' class="my-row"':''}>
-        <td>${medals[i]||(i+1)}</td>
+        <td>${medals[rank] || rank}</td>
         <td>${escHtml(p.name)}${isMe?' <span style="color:var(--green);font-size:.75rem">← tú</span>':''}</td>
         <td>${mp>0?`<span class="score-big">${p.score}</span><span style="color:#aaa;font-size:.8rem"> / ${mp}${pct}</span>`:'<span class="pending-score">—</span>'}</td>
       </tr>`;
