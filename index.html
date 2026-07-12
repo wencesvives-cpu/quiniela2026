@@ -862,7 +862,9 @@ async function fetchAndApplyResults(verbose = false) {
       }
       const cur = mergedKoTeams[targetSlot];
       // Skip if slot already has exactly these two teams (either order)
-      if (cur && cur.t1 !== 'Por definir' &&
+      // Exception: SF/Final slots (99+) always recalculate to catch bracket corrections
+      const isLateStageFill = targetSlot >= 99;
+      if (!isLateStageFill && cur && cur.t1 !== 'Por definir' &&
           ((cur.t1 === teamA && cur.t2 === teamB) || (cur.t1 === teamB && cur.t2 === teamA))) return;
       // Use API fixture for correct home/away ordering when available
       const api = apiKOByPair.get(`${teamA}|${teamB}`) || apiKOByPair.get(`${teamB}|${teamA}`);
