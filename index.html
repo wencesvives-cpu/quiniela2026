@@ -665,12 +665,25 @@ window.addEventListener('load', async () => {
   const savedId   = localStorage.getItem('q26_id');
   const savedName = localStorage.getItem('q26_name');
   if (savedId && savedName) {
-    currentUser = { id: savedId, name: savedName };
-    try { await withTimeout(loadUserPredictions(), 7000); } catch(e) { predictions = {}; }
-    showAppInterface();
-    showScreen('predictions');
-    // Auto-fetch in background (non-blocking)
-    autoFetchResults().catch(e => console.warn('auto-fetch:', e));
+    // Verify user still exists in Firebase — if deleted or never registered, force re-login
+    let userExists = false;
+    try {
+      const snap = await withTimeout(db.collection('participants').doc(savedId).get(), 5000);
+      userExists = snap.exists;
+    } catch(e) { userExists = true; } // on network error, assume valid to avoid locking out
+    if (userExists) {
+      currentUser = { id: savedId, name: savedName };
+      try { await withTimeout(loadUserPredictions(), 7000); } catch(e) { predictions = {}; }
+      showAppInterface();
+      showScreen('predictions');
+      // Auto-fetch in background (non-blocking)
+      autoFetchResults().catch(e => console.warn('auto-fetch:', e));
+    } else {
+      // User was deleted or doesn't exist — clear cache and show login
+      localStorage.removeItem('q26_id');
+      localStorage.removeItem('q26_name');
+      hideLoading();
+    }
   } else {
     hideLoading();
     autoFetchResults().catch(()=>{});
@@ -1041,7 +1054,11 @@ async function handleLogin() {
   } catch(e) {
     hideLoading();
     document.getElementById('loginBtn').disabled = false;
-    showLoginError('Error de conexión. Inténtalo de nuevo.');
+    if (e.message === 'USER_NOT_FOUND') {
+      showLoginError('Este nombre no está registrado. Comprueba cómo escribiste tu nombre o contacta con el administrador.');
+    } else {
+      showLoginError('Error de conexión. Inténtalo de nuevo.');
+    }
   }
 }
 function showLoginError(msg) {
@@ -1051,19 +1068,15 @@ function showLoginError(msg) {
 // ═══ PREDICTIONS ════════════════════════════════════════
 async function loadUserPredictions() {
   const snap = await db.collection('participants').doc(currentUser.id).get();
-  if (snap.exists && snap.data().predictions) {
-    predictions = snap.data().predictions;
+  if (snap.exists) {
+    predictions = snap.data().predictions || {};
     if (snap.data().name) currentUser.name = snap.data().name;
   } else {
-    predictions = {};
-    // Register the user immediately even if no picks yet,
-    // so they appear in the leaderboard and the admin can manage them.
-    await db.collection('participants').doc(currentUser.id).set({
-      name: currentUser.name,
-      predictions: {},
-      score: 0,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    // User not found in Firebase — reject login (registration is closed)
+    localStorage.removeItem('q26_id');
+    localStorage.removeItem('q26_name');
+    currentUser = null;
+    throw new Error('USER_NOT_FOUND');
   }
 }
 
