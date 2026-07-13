@@ -656,6 +656,9 @@ function withTimeout(p, ms) {
   return Promise.race([p, new Promise((_,r) => setTimeout(()=>r(new Error('timeout')),ms))]);
 }
 
+// ── Force reload when iOS restores page from bfcache (prevents stale code from running) ──
+window.addEventListener('pageshow', function(e) { if (e.persisted) window.location.reload(true); });
+
 // ── Startup ──
 window.addEventListener('load', async () => {
   if (location.hash === '#admin') document.getElementById('adminGear').style.display = 'block';
