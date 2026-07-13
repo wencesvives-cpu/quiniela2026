@@ -126,6 +126,10 @@
     .pick-btn.sel-1 { background:var(--p1-bg);border-color:var(--p1-br);color:var(--p1-tx); }
     .pick-btn.sel-X { background:var(--pX-bg);border-color:var(--pX-br);color:var(--pX-tx); }
     .pick-btn.sel-2 { background:var(--p2-bg);border-color:var(--p2-br);color:var(--p2-tx); }
+    .pick-btn.pick-team { width:auto;min-width:112px;max-width:150px;height:34px;font-size:.72rem;
+      padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .ko-picks { flex-direction:column; }
+    .phase-header { scroll-margin-top:96px; }
 
     /* Save bar */
     #saveBar { position:sticky;bottom:0;background:rgba(13,74,31,.96);backdrop-filter:blur(8px);
@@ -229,6 +233,7 @@
     @media(max-width:480px){
       .welcome-hero h1{font-size:1.4rem;} .match-card{padding:10px;gap:7px;}
       .pick-btn{width:32px;height:32px;font-size:.78rem;} .match-teams .t1,.match-teams .t2{font-size:.82rem;}
+      .pick-btn.pick-team{width:auto;min-width:98px;max-width:122px;height:32px;font-size:.68rem;}
       .match-num{display:none;}
     }
   </style>
@@ -679,6 +684,7 @@ window.addEventListener('load', async () => {
       try { await withTimeout(loadUserPredictions(), 7000); } catch(e) { predictions = {}; }
       showAppInterface();
       showScreen('predictions');
+      scrollToOpenPhase();
       // Auto-fetch in background (non-blocking)
       autoFetchResults().catch(e => console.warn('auto-fetch:', e));
     } else {
@@ -1065,6 +1071,7 @@ async function handleLogin() {
     localStorage.setItem('q26_name', name);
     showAppInterface();
     showScreen('predictions');
+    scrollToOpenPhase();
     autoFetchResults().catch(()=>{});
   } catch(e) {
     hideLoading();
@@ -1156,7 +1163,8 @@ function showScreen(name) {
 function viewLeaderboardPublic() {
   currentUser = null; predictions = {};
   document.getElementById('appHeader').style.display = 'flex';
-  document.getElementById('headerUser').textContent  = '(visitante)';
+  document.getElementById('headerUser').innerHTML =
+    '<button class="nav-btn" onclick="location.reload()" style="background:var(--gold);color:var(--green-dark);border-color:var(--gold);font-weight:700">Entrar →</button>';
   document.getElementById('navPred').style.display   = 'none';
   renderPhasePills();
   showScreen('leaderboard');
@@ -1171,6 +1179,15 @@ function toast(msg) {
   document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
 }
 function updateSaveStatus(msg) { document.getElementById('saveStatus').textContent = msg; }
+
+// Scroll to the first open (pickable) phase so users land on what matters
+function scrollToOpenPhase() {
+  setTimeout(() => {
+    const badge = document.querySelector('#matchList .badge-open');
+    const header = badge && badge.closest('.phase-header');
+    if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 350);
+}
 
 // ═══ RENDER MATCH LIST ═══════════════════════════════════
 function renderMatchList() {
@@ -1212,10 +1229,13 @@ function renderMatchList() {
     const gCls = m.tbd ? ' gko' + (locked ? ' glocked' : '') : (locked ? ' glocked' : '');
     const cCls = locked ? ' locked-phase' : '';
 
-    // For knockout: only 1 and 2 buttons
+    // Knockout: tap the name of the team that advances (1/2 fallback while TBD)
     const pickHtml = phase?.ko
-      ? `<button class="pick-btn${s1}" onclick="setPick(${m.id},'1')" ${dis} title="${teams.t1} avanza">1</button>
-         <button class="pick-btn${s2}" onclick="setPick(${m.id},'2')" ${dis} title="${teams.t2} avanza">2</button>`
+      ? (teams.ready
+        ? `<button class="pick-btn pick-team${s1}" onclick="setPick(${m.id},'1')" ${dis} title="${escHtml(teams.t1)} avanza">${escHtml(teams.t1)}</button>
+           <button class="pick-btn pick-team${s2}" onclick="setPick(${m.id},'2')" ${dis} title="${escHtml(teams.t2)} avanza">${escHtml(teams.t2)}</button>`
+        : `<button class="pick-btn${s1}" disabled>1</button>
+           <button class="pick-btn${s2}" disabled>2</button>`)
       : `<button class="pick-btn${s1}" onclick="setPick(${m.id},'1')" ${dis} title="${teams.t1} gana">1</button>
          <button class="pick-btn${sX}" onclick="setPick(${m.id},'X')" ${dis} title="Empate">X</button>
          <button class="pick-btn${s2}" onclick="setPick(${m.id},'2')" ${dis} title="${teams.t2} gana">2</button>`;
@@ -1230,7 +1250,7 @@ function renderMatchList() {
           <div class="t2">${escHtml(teams.t2)}</div>
           ${m.tbd && !teams.ready ? '<div class="tbd-label">Equipos por confirmar</div>' : ''}
         </div>
-        <div class="match-picks">${pickHtml}</div>
+        <div class="match-picks${phase?.ko && teams.ready ? ' ko-picks' : ''}">${pickHtml}</div>
       </div>`;
   });
 
@@ -1253,7 +1273,8 @@ function setPick(matchId, value) {
   const btns = card.querySelectorAll('.pick-btn');
   const vals = phaseForMatch(matchId)?.ko ? ['1','2'] : ['1','X','2'];
   btns.forEach((btn, i) => {
-    btn.className = 'pick-btn' + (predictions[matchId] === vals[i] ? ' sel-' + vals[i] : '');
+    const team = btn.classList.contains('pick-team') ? ' pick-team' : '';
+    btn.className = 'pick-btn' + team + (predictions[matchId] === vals[i] ? ' sel-' + vals[i] : '');
   });
 
   updateProgress();
@@ -1713,6 +1734,6 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
-<!-- build 2026-07-12b: fix merge-deletes + stable t1/t2 order + name-based results -->
+<!-- build 2026-07-12c: UX — auto-scroll a fase abierta + botones con nombre en KO + Entrar para visitantes -->
 </body>
 </html>
