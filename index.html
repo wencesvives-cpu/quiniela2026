@@ -877,10 +877,10 @@ async function fetchAndApplyResults(verbose = false) {
         return;
       }
       const cur = mergedKoTeams[targetSlot];
-      // Skip if slot already has exactly these two teams (either order)
-      // Exception: SF/Final slots (99+) always recalculate to catch bracket corrections
-      const isLateStageFill = targetSlot >= 99;
-      if (!isLateStageFill && cur && cur.t1 !== 'Por definir' &&
+      // Skip if slot already has exactly these two teams (either order) — keeps the
+      // displayed t1/t2 order stable so saved 1/2 picks never flip meaning.
+      // (A wrong pair — bracket correction — still gets replaced below.)
+      if (cur && cur.t1 !== 'Por definir' &&
           ((cur.t1 === teamA && cur.t2 === teamB) || (cur.t1 === teamB && cur.t2 === teamA))) return;
       // Use API fixture for correct home/away ordering when available
       const api = apiKOByPair.get(`${teamA}|${teamB}`) || apiKOByPair.get(`${teamB}|${teamA}`);
@@ -919,10 +919,18 @@ async function fetchAndApplyResults(verbose = false) {
     }
     if (!internalMatch || assignedResults.has(internalMatch.id)) continue;
     const phase = phaseForMatch(internalMatch.id);
+    // Orient result by WINNER NAME vs our stored t1/t2 (not API home/away),
+    // so it stays correct even if our t1/t2 order differs from the API fixture.
+    const w1 = TEAM_API_MAP[apiT1]||apiT1.toUpperCase();
+    const w2 = TEAM_API_MAP[apiT2]||apiT2.toUpperCase();
+    const kk = stage === 'GROUP_STAGE' ? getTeams(internalMatch) : (mergedKoTeams[internalMatch.id] || {});
     let result;
-    if (apiWinner === 'HOME_TEAM') result = '1';
-    else if (apiWinner === 'AWAY_TEAM') result = '2';
-    else if (apiWinner === 'DRAW' && !phase?.ko) result = 'X';
+    if (apiWinner === 'DRAW') { if (!phase?.ko) result = 'X'; }
+    else {
+      const winnerName = apiWinner === 'HOME_TEAM' ? w1 : w2;
+      if (winnerName === kk.t1) result = '1';
+      else if (winnerName === kk.t2) result = '2';
+    }
     if (result) { newResults[internalMatch.id] = result; assignedResults.add(internalMatch.id); }
   }
 
@@ -945,9 +953,12 @@ async function fetchAndApplyResults(verbose = false) {
       return k && !assignedResults.has(mx.id) && ((k.t1===t1&&k.t2===t2)||(k.t1===t2&&k.t2===t1));
     });
     if (!internalMatch) continue;
+    // Orient by winner name vs stored t1/t2 (same reasoning as Step 3)
+    const kk = mergedKoTeams[internalMatch.id] || {};
+    const winnerName = apiWinner === 'HOME_TEAM' ? t1 : apiWinner === 'AWAY_TEAM' ? t2 : null;
     let result;
-    if (apiWinner === 'HOME_TEAM') result = '1';
-    else if (apiWinner === 'AWAY_TEAM') result = '2';
+    if (winnerName && winnerName === kk.t1) result = '1';
+    else if (winnerName && winnerName === kk.t2) result = '2';
     if (result) { newResults[internalMatch.id] = result; assignedResults.add(internalMatch.id); }
   }
   // Pass C: update bracket with any OCT/CUA results found in Step 3B
@@ -967,7 +978,8 @@ async function fetchAndApplyResults(verbose = false) {
   if (hasNew) {
     results = {...results, ...newResults};
     koTeams = {...koTeams, ...newKoTeams};
-    await db.collection('settings').doc('global').set({results, koTeams}, {merge: true});
+    // update() replaces the whole maps — deleted keys really disappear (set+merge kept them forever)
+    await db.collection('settings').doc('global').update({results, koTeams});
     await recomputeAllScores();
     if (document.getElementById('screenPredictions').classList.contains('active')) renderMatchList();
     const nR = Object.keys(newResults).length;
@@ -1089,12 +1101,14 @@ async function savePredictions() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = '⏳ Guardando…';
   try {
-    await db.collection('participants').doc(currentUser.id).set({
+    // update(): replaces the predictions map (un-picked matches really disappear)
+    // and cannot re-create a deleted user (extra guard for the closed registration)
+    await db.collection('participants').doc(currentUser.id).update({
       name: currentUser.name,
       predictions,
       score: computeScore(predictions, results),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    });
     toast('✅ Guardado correctamente');
     updateSaveStatus('Guardado ✓');
   } catch(e) {
@@ -1471,12 +1485,14 @@ async function saveParticipantAdmin() {
   if (!adminPartId) return toast('Carga primero un participante');
   showLoading('Guardando participante…');
   try {
+    // Full set WITHOUT merge: replaces the doc so removed picks really disappear.
+    // (set, not update, because the admin is allowed to create participants here)
     await db.collection('participants').doc(adminPartId).set({
       name: window._adminPartDisplayName || adminPartId,
       predictions: adminPartPicks,
       score: computeScore(adminPartPicks, results),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+    });
     toast(`✅ Pronósticos de ${window._adminPartDisplayName} guardados`);
     document.getElementById('adminPartInfo').innerHTML =
       `✅ Guardado correctamente · ${Object.keys(adminPartPicks).length} pronósticos`;
@@ -1580,7 +1596,8 @@ async function saveAdminData() {
     results  = { ...adminEdits };
     koTeams  = mergedKo;
 
-    await db.collection('settings').doc('global').set({ results, koTeams }, { merge: true });
+    // update() replaces the whole maps — deleted results (× / Limpiar) really disappear
+    await db.collection('settings').doc('global').update({ results, koTeams });
     await recomputeAllScores();
     // Re-fetch to sanitize stale results and re-derive bracket with correct data
     localStorage.removeItem('q26_lastFetch');
@@ -1696,5 +1713,6 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
+<!-- build 2026-07-12b: fix merge-deletes + stable t1/t2 order + name-based results -->
 </body>
 </html>
